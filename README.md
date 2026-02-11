@@ -119,6 +119,10 @@ Formato chunkado:
 node scripts/benchmark/aggregate.js benchmark/v0/baseline_v0.json benchmark/v1/csv
 ```
 
+## Planejamento TCC II
+
+- Plano oficial: `docs/tcc/plano_desenvolvimento_tcc2_2026.md`
+
 ## Estrutura
 
 - `index.html`

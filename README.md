@@ -20,7 +20,6 @@ MVP inicial com:
 Este projeto usa apenas arquivos estaticos (sem build).
 
 ```bash
-cd "/Users/eduardokuhn/Documents/New project"
 python3 -m http.server 5173
 ```
 
@@ -38,20 +37,20 @@ Para usar sua lib interna, injete uma funcao global antes de `src/main.js`
 
 ```html
 <script>
-  window.__VOX_LOADER__ = async function loadVox(voxUrl) {
-    // formato recomendado:
-    // { voxels: [{ x, y, z, color: [r, g, b] }, ...] }
-    //
-    // formato legado suportado:
-    // {
-    //   "VOX ": 150,
-    //   PACK: 1,
-    //   SIZE: { x, y, z },
-    //   XYZI: [{ x, y, z, c }, ...],
-    //   RGBA: [{ r, g, b, a }, ...]
-    // }
-    return { voxels: [] }
-  };
+	window.__VOX_LOADER__ = async function loadVox(voxUrl) {
+		// formato recomendado:
+		// { voxels: [{ x, y, z, color: [r, g, b] }, ...] }
+		//
+		// formato legado suportado:
+		// {
+		//   "VOX ": 150,
+		//   PACK: 1,
+		//   SIZE: { x, y, z },
+		//   XYZI: [{ x, y, z, c }, ...],
+		//   RGBA: [{ r, g, b, a }, ...]
+		// }
+		return { voxels: [] }
+	}
 </script>
 ```
 

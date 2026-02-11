@@ -19,6 +19,50 @@ function formatDuration(ms) {
 	return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0')
 }
 
+function numberOr(value, fallback) {
+	const n = Number(value)
+	return Number.isFinite(n) ? n : fallback
+}
+
+function csvEscape(value) {
+	const raw = value == null ? '' : String(value)
+	if (!/[",\n]/.test(raw)) {
+		return raw
+	}
+	return '"' + raw.replaceAll('"', '""') + '"'
+}
+
+function rowsToCsv(rows) {
+	if (rows.length === 0) {
+		return ''
+	}
+	const header = Object.keys(rows[0])
+	const lines = [header.join(',')]
+	for (const row of rows) {
+		lines.push(header.map((column) => csvEscape(row[column])).join(','))
+	}
+	return lines.join('\n')
+}
+
+function browserLabel() {
+	if (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands)) {
+		return navigator.userAgentData.brands
+			.map((item) => item.brand + ' ' + item.version)
+			.join(', ')
+	}
+	return navigator.appName || 'unknown'
+}
+
+function readCommitHash() {
+	const params = new URLSearchParams(window.location.search)
+	return (
+		params.get('commit') ||
+		window.__APP_COMMIT__ ||
+		window.__COMMIT_HASH__ ||
+		'unknown'
+	)
+}
+
 export class BenchmarkRunner {
 	constructor({
 		engine,
@@ -176,10 +220,20 @@ export class BenchmarkRunner {
 			summary.updateMsAvg.toFixed(3) +
 			' | mesh rebuild ms: ' +
 			summary.meshGenerationMsAvg.toFixed(3) +
-			' | drawCalls: ' +
+			'\nchunks visíveis: ' +
+			latest.visibleChunks +
+			'/' +
+			latest.chunkCount +
+			' | culled: ' +
+			latest.culledChunks +
+			' | tris visíveis: ' +
+			latest.visibleTriangles +
+			'\ndrawCalls: ' +
 			latest.drawCalls +
-			' | tris: ' +
+			' | tris render: ' +
 			latest.triangleCount +
+			' | tris total: ' +
+			latest.totalTriangleCount +
 			'\nheap JS: ' +
 			heapMb
 	}
@@ -196,6 +250,7 @@ export class BenchmarkRunner {
 			runOnceBtn,
 			runSuiteBtn,
 			downloadBtn,
+			downloadCsvBtn,
 		} = controls
 
 		runOnceBtn.addEventListener('click', async () => {
@@ -226,7 +281,10 @@ export class BenchmarkRunner {
 			this.renderOutput(result)
 		})
 
-		downloadBtn.addEventListener('click', () => this.downloadResults())
+		downloadBtn.addEventListener('click', () => this.downloadResultsJson())
+		if (downloadCsvBtn) {
+			downloadCsvBtn.addEventListener('click', () => this.downloadResultsCsv())
+		}
 	}
 
 	readOptions({
@@ -240,10 +298,10 @@ export class BenchmarkRunner {
 	}) {
 		return {
 			scenarioId: scenarioSelect.value,
-			seed: Number(seedInput.value || '1337'),
-			warmupMs: Number(warmupInput.value || '10000'),
-			collectMs: Number(collectInput.value || '60000'),
-			repetitions: Number(repeatInput.value || '3'),
+			seed: numberOr(seedInput.value, 1337),
+			warmupMs: numberOr(warmupInput.value, 10_000),
+			collectMs: numberOr(collectInput.value, 60_000),
+			repetitions: Math.max(1, Math.floor(numberOr(repeatInput.value, 3))),
 			voxUrl:
 				voxUrlInput && voxUrlInput.value
 					? voxUrlInput.value.trim()
@@ -252,6 +310,30 @@ export class BenchmarkRunner {
 				bin3UrlInput && bin3UrlInput.value
 					? bin3UrlInput.value.trim()
 					: DEFAULT_CATHEDRAL_BIN3_URL,
+		}
+	}
+
+	collectEnvironment() {
+		const canvas = this.engine.canvas
+		const gl = this.engine.gl
+		return {
+			timestamp: timestamp(),
+			browser: browserLabel(),
+			userAgent: navigator.userAgent || 'unknown',
+			language: navigator.language || 'unknown',
+			platform: navigator.platform || 'unknown',
+			hardwareConcurrency: navigator.hardwareConcurrency || null,
+			deviceMemoryGiB:
+				typeof navigator.deviceMemory === 'number'
+					? navigator.deviceMemory
+					: null,
+			dpr: window.devicePixelRatio || 1,
+			canvasWidth: canvas ? canvas.width : null,
+			canvasHeight: canvas ? canvas.height : null,
+			canvasClientWidth: canvas ? canvas.clientWidth : null,
+			canvasClientHeight: canvas ? canvas.clientHeight : null,
+			glVersion: gl ? gl.getParameter(gl.VERSION) : 'unknown',
+			commitHash: readCommitHash(),
 		}
 	}
 
@@ -273,6 +355,16 @@ export class BenchmarkRunner {
 				options.collectMs +
 				'ms',
 		)
+
+		const environment = this.collectEnvironment()
+		const protocol = {
+			seed: options.seed,
+			warmupMs: options.warmupMs,
+			collectMs: options.collectMs,
+			repetitions: options.repetitions,
+			scenarioOrder: this.scenarioIds.join(','),
+		}
+
 		this.setProgressPhase('carregando cenário')
 		const scenario = await this.scenarioLoader.loadScenario(
 			options.scenarioId,
@@ -294,11 +386,15 @@ export class BenchmarkRunner {
 
 		this.setProgressPhase('finalizando')
 		const summary = summarizeFrameSamples(this.samples)
+		const finalFrame = this.engine.getFrameMetrics()
 		const result = {
 			kind: 'single',
 			createdAt: timestamp(),
 			options,
+			protocol,
+			environment,
 			loadMetrics,
+			finalFrame,
 			summary,
 		}
 		this.results.push(result)
@@ -349,13 +445,98 @@ export class BenchmarkRunner {
 		this.outputElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n`
 	}
 
-	downloadResults() {
+	collectSingleResults() {
+		const singles = []
+		for (const result of this.results) {
+			if (result.kind === 'single') {
+				singles.push(result)
+				continue
+			}
+			if (result.kind === 'suite' && Array.isArray(result.runs)) {
+				for (const run of result.runs) {
+					if (run.kind === 'single') {
+						singles.push(run)
+					}
+				}
+			}
+		}
+		const seen = new Set()
+		const dedup = []
+		for (const item of singles) {
+			const key =
+				String(item.createdAt) +
+				'|' +
+				String(item.options?.scenarioId) +
+				'|' +
+				String(item.options?.repetition ?? 0) +
+				'|' +
+				String(item.options?.runNumber ?? 0)
+			if (seen.has(key)) {
+				continue
+			}
+			seen.add(key)
+			dedup.push(item)
+		}
+		return dedup
+	}
+
+	buildCsvRows() {
+		const singles = this.collectSingleResults()
+		return singles.map((item) => ({
+			createdAt: item.createdAt,
+			scenarioId: item.options?.scenarioId ?? '',
+			repetition: item.options?.repetition ?? '',
+			runNumber: item.options?.runNumber ?? '',
+			totalRuns: item.options?.totalRuns ?? '',
+			seed: item.options?.seed ?? '',
+			warmupMs: item.options?.warmupMs ?? '',
+			collectMs: item.options?.collectMs ?? '',
+			fpsAvg: item.summary?.fpsAvg ?? '',
+			fpsP50: item.summary?.fpsP50 ?? '',
+			fpsP95: item.summary?.fpsP95 ?? '',
+			frameMsAvg: item.summary?.frameMsAvg ?? '',
+			frameMsP95: item.summary?.frameMsP95 ?? '',
+			frameCpuMsAvg: item.summary?.frameCpuMsAvg ?? '',
+			updateMsAvg: item.summary?.updateMsAvg ?? '',
+			meshGenerationMsAvg: item.summary?.meshGenerationMsAvg ?? '',
+			chunkCountAvg: item.summary?.chunkCountAvg ?? '',
+			visibleChunksAvg: item.summary?.visibleChunksAvg ?? '',
+			culledChunksAvg: item.summary?.culledChunksAvg ?? '',
+			visibleTrianglesAvg: item.summary?.visibleTrianglesAvg ?? '',
+			totalTriangleCountAvg: item.summary?.totalTriangleCountAvg ?? '',
+			jsHeapAvgBytes: item.summary?.jsHeapAvgBytes ?? '',
+			loadMeshGenerationMs: item.loadMetrics?.meshGenerationMs ?? '',
+			loadTriangleCount: item.loadMetrics?.triangleCount ?? '',
+			loadVoxelCount: item.loadMetrics?.voxelCount ?? '',
+			loadChunkCount: item.loadMetrics?.chunkCount ?? '',
+			browser: item.environment?.browser ?? '',
+			userAgent: item.environment?.userAgent ?? '',
+			dpr: item.environment?.dpr ?? '',
+			canvasWidth: item.environment?.canvasWidth ?? '',
+			canvasHeight: item.environment?.canvasHeight ?? '',
+			commitHash: item.environment?.commitHash ?? '',
+		}))
+	}
+
+	downloadResultsJson() {
 		const payload = JSON.stringify(this.results, null, 2)
 		const blob = new Blob([payload], { type: 'application/json' })
 		const url = URL.createObjectURL(blob)
 		const anchor = document.createElement('a')
 		anchor.href = url
 		anchor.download = 'benchmark-results-' + Date.now() + '.json'
+		anchor.click()
+		URL.revokeObjectURL(url)
+	}
+
+	downloadResultsCsv() {
+		const rows = this.buildCsvRows()
+		const csv = rowsToCsv(rows)
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+		const url = URL.createObjectURL(blob)
+		const anchor = document.createElement('a')
+		anchor.href = url
+		anchor.download = 'benchmark-results-' + Date.now() + '.csv'
 		anchor.click()
 		URL.revokeObjectURL(url)
 	}

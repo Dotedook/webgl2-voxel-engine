@@ -12,6 +12,23 @@ function getHeapBytes() {
 	return performance.memory.usedJSHeapSize
 }
 
+function normalizeChunks(chunks) {
+	if (!Array.isArray(chunks)) {
+		return []
+	}
+	return chunks.map((chunk, index) => ({
+		id: String(
+			chunk && (chunk.id ?? chunk.chunkId ?? chunk.key ?? 'chunk-' + index),
+		),
+		voxels:
+			chunk && Array.isArray(chunk.voxels)
+				? chunk.voxels
+				: Array.isArray(chunk)
+					? chunk
+					: [],
+	}))
+}
+
 export class Engine {
 	constructor({ canvas }) {
 		this.canvas = canvas
@@ -45,7 +62,12 @@ export class Engine {
 			meshGenerationMs: 0,
 			drawCalls: 0,
 			triangleCount: 0,
+			totalTriangleCount: 0,
 			voxelCount: 0,
+			chunkCount: 0,
+			visibleChunks: 0,
+			culledChunks: 0,
+			visibleTriangles: 0,
 			jsHeapBytes: null,
 			elapsedSeconds: 0,
 		}
@@ -109,14 +131,27 @@ export class Engine {
 		}
 
 		this.setCameraScript(scenario.cameraScript || null)
-		const mesh = this.renderer.uploadVoxels(scenario.voxels, {
-			voxelSize: this.scenarioVoxelSize,
-		})
+		let mesh
+		const chunks = normalizeChunks(scenario.chunks)
+		if (chunks.length > 0) {
+			mesh = this.renderer.replaceChunks(chunks, {
+				voxelSize: this.scenarioVoxelSize,
+			})
+			scenario.chunks = chunks
+		} else {
+			const voxels = Array.isArray(scenario.voxels) ? scenario.voxels : []
+			mesh = this.renderer.uploadVoxels(voxels, {
+				voxelSize: this.scenarioVoxelSize,
+			})
+			scenario.voxels = voxels
+		}
+		const worldStats = this.renderer.getWorldStats()
 		return {
 			meshGenerationMs: mesh.meshGenerationMs,
-			vertexCount: mesh.vertexCount,
-			triangleCount: mesh.triangleCount,
-			voxelCount: scenario.voxels.length,
+			vertexCount: worldStats.vertexCount,
+			triangleCount: worldStats.triangleCount,
+			voxelCount: worldStats.voxelCount,
+			chunkCount: worldStats.chunkCount,
 			scenarioId: scenario.id,
 		}
 	}
@@ -186,12 +221,37 @@ export class Engine {
 					voxelSize: this.scenarioVoxelSize,
 				})
 				meshGenerationMs = mesh.meshGenerationMs
+			} else if (worldUpdate && Array.isArray(worldUpdate.chunks)) {
+				const chunks = normalizeChunks(worldUpdate.chunks)
+				this.currentScenario.chunks = chunks
+				const mesh = this.renderer.replaceChunks(chunks, {
+					voxelSize: this.scenarioVoxelSize,
+				})
+				meshGenerationMs = mesh.meshGenerationMs
+			} else if (worldUpdate && worldUpdate.chunkUpdates) {
+				const upserts = normalizeChunks(worldUpdate.chunkUpdates.upserts || [])
+				const removeIds = Array.isArray(worldUpdate.chunkUpdates.removeIds)
+					? worldUpdate.chunkUpdates.removeIds
+					: []
+				let totalMeshGenerationMs = 0
+				if (upserts.length > 0) {
+					const upsertResult = this.renderer.upsertChunks(upserts, {
+						voxelSize: this.scenarioVoxelSize,
+					})
+					totalMeshGenerationMs += upsertResult.meshGenerationMs
+				}
+				if (removeIds.length > 0) {
+					this.renderer.removeChunks(removeIds)
+				}
+				meshGenerationMs = totalMeshGenerationMs
 			}
 		}
 		const updateMs = performance.now() - updateStart
 
 		this.resizeCanvasToDisplaySize()
 		this.renderer.render(this.camera, this.canvas.width, this.canvas.height)
+		const worldStats = this.renderer.getWorldStats()
+		const visibility = this.renderer.visibility
 
 		const frameCpuMs = performance.now() - frameStart
 		this.lastFrameMetrics = {
@@ -202,7 +262,12 @@ export class Engine {
 			meshGenerationMs,
 			drawCalls: this.renderer.drawCalls,
 			triangleCount: this.renderer.triangleCount,
-			voxelCount: this.currentScenario ? this.currentScenario.voxels.length : 0,
+			totalTriangleCount: worldStats.triangleCount,
+			voxelCount: worldStats.voxelCount,
+			chunkCount: visibility.totalChunks,
+			visibleChunks: visibility.visibleChunks,
+			culledChunks: visibility.culledChunks,
+			visibleTriangles: visibility.visibleTriangles,
 			jsHeapBytes: getHeapBytes(),
 			elapsedSeconds: this.elapsedSeconds,
 		}

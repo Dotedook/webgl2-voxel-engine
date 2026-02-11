@@ -162,7 +162,9 @@ async function main() {
 		' | voxels: ' +
 		loadMetrics.voxelCount +
 		' | tris: ' +
-		loadMetrics.triangleCount
+		loadMetrics.triangleCount +
+		' | chunks: ' +
+		loadMetrics.chunkCount
 
 	if (!benchmarkMode) {
 		return
@@ -200,6 +202,7 @@ async function main() {
 		runOnceBtn: document.getElementById('run-once-btn'),
 		runSuiteBtn: document.getElementById('run-suite-btn'),
 		downloadBtn: document.getElementById('download-btn'),
+		downloadCsvBtn: document.getElementById('download-csv-btn'),
 	})
 
 	if (params.get('autorun') === '1') {

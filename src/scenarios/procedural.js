@@ -115,14 +115,15 @@ function createStreamingChunk({ chunkIndex, chunkDepth, width, seed }) {
 	return voxels
 }
 
-function flattenChunks(chunkMap) {
-	const out = []
-	for (const voxels of chunkMap.values()) {
-		for (const voxel of voxels) {
-			out.push(voxel)
-		}
+function toChunkId(chunkIndex) {
+	return 'z' + chunkIndex
+}
+
+function chunkRecord(chunkIndex, voxels) {
+	return {
+		id: toChunkId(chunkIndex),
+		voxels,
 	}
-	return out
 }
 
 export function createSmallFallbackScenario() {
@@ -163,13 +164,14 @@ export function createMediumScenario(seed) {
 	const width = 72
 	const chunkDepth = 24
 	const behindChunks = 1
-	const aheadChunks = 5
+	const aheadChunks = 4
 	const walkSpeed = 9.5
 	let centerChunk = 0
 	const activeChunks = new Map()
 
 	function ensureWindow(nextCenterChunk) {
-		let changed = false
+		const upserts = []
+		const removeIds = []
 		const keep = new Set()
 		for (
 			let chunkIndex = nextCenterChunk - behindChunks;
@@ -178,34 +180,38 @@ export function createMediumScenario(seed) {
 		) {
 			keep.add(chunkIndex)
 			if (!activeChunks.has(chunkIndex)) {
-				activeChunks.set(
+				const voxels = createStreamingChunk({
 					chunkIndex,
-					createStreamingChunk({
-						chunkIndex,
-						chunkDepth,
-						width,
-						seed,
-					}),
-				)
-				changed = true
+					chunkDepth,
+					width,
+					seed,
+				})
+				activeChunks.set(chunkIndex, voxels)
+				upserts.push(chunkRecord(chunkIndex, voxels))
 			}
 		}
 		for (const chunkIndex of [...activeChunks.keys()]) {
 			if (!keep.has(chunkIndex)) {
 				activeChunks.delete(chunkIndex)
-				changed = true
+				removeIds.push(toChunkId(chunkIndex))
 			}
 		}
-		return changed
+		return {
+			changed: upserts.length > 0 || removeIds.length > 0,
+			upserts,
+			removeIds,
+		}
 	}
 
 	ensureWindow(centerChunk)
-	const initialVoxels = flattenChunks(activeChunks)
+	const initialChunks = [...activeChunks.entries()].map(([chunkIndex, voxels]) =>
+		chunkRecord(chunkIndex, voxels),
+	)
 	const initialHeight = 15
 
 	return {
 		id: 'medium',
-		voxels: initialVoxels,
+		chunks: initialChunks,
 		cameraStart: {
 			position: [0, initialHeight, 8],
 			yaw: Math.PI * 0.5,
@@ -222,9 +228,13 @@ export function createMediumScenario(seed) {
 			const nextCenterChunk = Math.floor(camera.position[2] / chunkDepth)
 			if (nextCenterChunk !== centerChunk) {
 				centerChunk = nextCenterChunk
-				if (ensureWindow(centerChunk)) {
+				const diff = ensureWindow(centerChunk)
+				if (diff.changed) {
 					return {
-						voxels: flattenChunks(activeChunks),
+						chunkUpdates: {
+							upserts: diff.upserts,
+							removeIds: diff.removeIds,
+						},
 					}
 				}
 			}

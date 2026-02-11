@@ -3,15 +3,20 @@
 MVP inicial com:
 
 - Engine WebGL2 com loop de render, camera e input.
-- Renderizacao de voxels por mesh basica (baseline).
+- Renderizacao de voxels com meshing por faces expostas.
+- Pipeline hibrido de mundo:
+  - legado por `voxels` (malha unica),
+  - chunkado por `chunks` com atualizacao incremental (`upsert/remove`).
+- Frustum culling por AABB de chunk.
 - Modulo de cenarios (`small`, `medium`, `large`) com seed fixa.
   - `small`: modelo `.vox` (personagem).
-  - `medium` (cenario 2): terreno procedural com geracao incremental por chunks conforme avanco da camera.
+  - `medium` (cenario 2): terreno procedural com streaming incremental por chunks.
   - `large` (cenario 3): catedral a partir de `.bin3` (Sibenik).
 - Modulo de benchmark separado com:
-  - coletor proprio (frame delta, frame CPU, FPS, update, heap),
+  - coletor proprio (frame delta, frame CPU, FPS, update, heap, chunks visiveis/culled),
   - painel de metricas ao vivo interno (sem dependencias externas),
-  - progresso de benchmark (fase, tempo decorrido e tempo restante).
+  - progresso de benchmark (fase, tempo decorrido e tempo restante),
+  - exportacao JSON e CSV.
 - Loader `.vox` nativo (MagicaVoxel) com fallback para loader interno.
 - Loader `.bin3` para nuvem de pontos voxelizada.
 
@@ -29,6 +34,10 @@ Abra:
 - App normal (executar direto): `http://localhost:5173/?scenario=medium&seed=1337`
 - Benchmark: `http://localhost:5173/?benchmark=1`
 - Benchmark com autorun: `http://localhost:5173/?benchmark=1&autorun=1&scenario=medium&seed=1337`
+
+Opcional para rastreabilidade de experimento:
+
+- Commit hash no resultado: `http://localhost:5173/?benchmark=1&commit=<hash>`
 
 ## Loader .vox (hook)
 
@@ -82,6 +91,34 @@ No benchmark (`?benchmark=1`), o campo `BIN3 URL (large)` permite trocar o arqui
 - `engine.getFrameMetrics()`
 - `engine.onFrame(listener)`
 
+## Contrato de cenario (hibrido)
+
+Formato legado (continua suportado):
+
+- `scenario.voxels: Voxel[]`
+
+Formato chunkado:
+
+- `scenario.chunks: Array<{ id: string, voxels: Voxel[] }>`
+- `scenario.updateWorld()` pode retornar:
+  - `{ chunkUpdates: { upserts: Chunk[], removeIds: string[] } }`
+  - ou `{ chunks: Chunk[] }` para substituicao completa
+  - ou `{ voxels: Voxel[] }` (legado)
+
+## Benchmark v1 (artefatos)
+
+- Estrutura versionada:
+  - `benchmark/v1/raw`
+  - `benchmark/v1/csv`
+  - `benchmark/v1/plots`
+  - `benchmark/v1/report`
+- Protocolo: `benchmark/v1/report/protocolo_v1.md`
+- Consolidacao JSON -> CSV:
+
+```bash
+node scripts/benchmark/aggregate.js benchmark/v0/baseline_v0.json benchmark/v1/csv
+```
+
 ## Estrutura
 
 - `index.html`
@@ -89,3 +126,6 @@ No benchmark (`?benchmark=1`), o campo `BIN3 URL (large)` permite trocar o arqui
 - `src/engine/*`
 - `src/scenarios/*`
 - `src/benchmark/*`
+- `scripts/benchmark/*`
+- `benchmark/v1/*`
+- `docs/tcc/*`

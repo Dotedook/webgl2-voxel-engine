@@ -26,6 +26,11 @@ export function summarizeFrameSamples(samples) {
 	const frameCpuMs = samples.map((s) => s.frameCpuMs ?? s.frameMs)
 	const updateMs = samples.map((s) => s.updateMs)
 	const meshGenerationMs = samples.map((s) => s.meshGenerationMs || 0)
+	const chunkCount = samples.map((s) => s.chunkCount || 0)
+	const visibleChunks = samples.map((s) => s.visibleChunks || 0)
+	const culledChunks = samples.map((s) => s.culledChunks || 0)
+	const visibleTriangles = samples.map((s) => s.visibleTriangles || 0)
+	const totalTriangleCount = samples.map((s) => s.totalTriangleCount || 0)
 	const fps = frameDeltaMs.map((ms) => (ms > 0 ? 1000 / ms : 0))
 	const heap = samples
 		.map((s) => s.jsHeapBytes)
@@ -45,6 +50,11 @@ export function summarizeFrameSamples(samples) {
 		updateMsP95: percentile(updateMs, 95),
 		meshGenerationMsAvg: average(meshGenerationMs),
 		meshGenerationMsP95: percentile(meshGenerationMs, 95),
+		chunkCountAvg: average(chunkCount),
+		visibleChunksAvg: average(visibleChunks),
+		culledChunksAvg: average(culledChunks),
+		visibleTrianglesAvg: average(visibleTriangles),
+		totalTriangleCountAvg: average(totalTriangleCount),
 		jsHeapAvgBytes: heap.length ? average(heap) : null,
 	}
 }

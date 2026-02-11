@@ -41,6 +41,14 @@ const CUBE_FACES = [
 ]
 
 const FACE_TRIANGLE_ORDER = [0, 1, 2, 0, 2, 3]
+const FACE_NEIGHBORS = [
+	[0, 0, 1],
+	[0, 0, -1],
+	[1, 0, 0],
+	[-1, 0, 0],
+	[0, 1, 0],
+	[0, -1, 0],
+]
 
 function compileShader(gl, type, source) {
 	const shader = gl.createShader(type)
@@ -81,67 +89,150 @@ function normalizeColor(color) {
 	return [color[0], color[1], color[2]]
 }
 
-function buildVoxelVertices(voxels, voxelSize = 1) {
-	const stride = 6
-	const triangleVerticesPerVoxel =
-		CUBE_FACES.length * FACE_TRIANGLE_ORDER.length
-	const output = new Float32Array(
-		voxels.length * triangleVerticesPerVoxel * stride,
-	)
-	let ptr = 0
+function voxelKey(x, y, z) {
+	return x + ',' + y + ',' + z
+}
+
+function computeBoundsFromVoxels(voxels, voxelSize) {
+	if (!Array.isArray(voxels) || voxels.length === 0) {
+		return null
+	}
 	const scale = Math.max(0.2, voxelSize)
 	const offset = (1 - scale) * 0.5
+	let minX = Number.POSITIVE_INFINITY
+	let minY = Number.POSITIVE_INFINITY
+	let minZ = Number.POSITIVE_INFINITY
+	let maxX = Number.NEGATIVE_INFINITY
+	let maxY = Number.NEGATIVE_INFINITY
+	let maxZ = Number.NEGATIVE_INFINITY
 
-	for (let i = 0; i < voxels.length; i += 1) {
-		const voxel = voxels[i]
+	for (const voxel of voxels) {
+		const x0 = voxel.x + offset
+		const y0 = voxel.y + offset
+		const z0 = voxel.z + offset
+		const x1 = x0 + scale
+		const y1 = y0 + scale
+		const z1 = z0 + scale
+		minX = Math.min(minX, x0)
+		minY = Math.min(minY, y0)
+		minZ = Math.min(minZ, z0)
+		maxX = Math.max(maxX, x1)
+		maxY = Math.max(maxY, y1)
+		maxZ = Math.max(maxZ, z1)
+	}
+
+	return { minX, minY, minZ, maxX, maxY, maxZ }
+}
+
+function buildExposedVoxelVertices(voxels, voxelSize = 1) {
+	const scale = Math.max(0.2, voxelSize)
+	const offset = (1 - scale) * 0.5
+	const values = []
+	const occupancy = new Set()
+
+	for (const voxel of voxels) {
+		occupancy.add(voxelKey(voxel.x, voxel.y, voxel.z))
+	}
+
+	let triangleCount = 0
+	for (const voxel of voxels) {
 		const [cr, cg, cb] = normalizeColor(voxel.color)
 		for (let face = 0; face < CUBE_FACES.length; face += 1) {
+			const dir = FACE_NEIGHBORS[face]
+			const neighborKey = voxelKey(
+				voxel.x + dir[0],
+				voxel.y + dir[1],
+				voxel.z + dir[2],
+			)
+			if (occupancy.has(neighborKey)) {
+				continue
+			}
 			const corners = CUBE_FACES[face]
 			for (let tri = 0; tri < FACE_TRIANGLE_ORDER.length; tri += 1) {
 				const cornerIndex = FACE_TRIANGLE_ORDER[tri] * 3
-				output[ptr++] = voxel.x + corners[cornerIndex + 0] * scale + offset
-				output[ptr++] = voxel.y + corners[cornerIndex + 1] * scale + offset
-				output[ptr++] = voxel.z + corners[cornerIndex + 2] * scale + offset
-				output[ptr++] = cr
-				output[ptr++] = cg
-				output[ptr++] = cb
+				values.push(voxel.x + corners[cornerIndex + 0] * scale + offset)
+				values.push(voxel.y + corners[cornerIndex + 1] * scale + offset)
+				values.push(voxel.z + corners[cornerIndex + 2] * scale + offset)
+				values.push(cr, cg, cb)
 			}
+			triangleCount += 2
 		}
 	}
-	return output
+
+	return {
+		vertices: new Float32Array(values),
+		triangleCount,
+		bounds: computeBoundsFromVoxels(voxels, voxelSize),
+	}
+}
+
+function setFrustumPlane(out, offset, x, y, z, w) {
+	const len = Math.hypot(x, y, z) || 1
+	out[offset + 0] = x / len
+	out[offset + 1] = y / len
+	out[offset + 2] = z / len
+	out[offset + 3] = w / len
+}
+
+function extractFrustumPlanes(out, m) {
+	// left/right
+	setFrustumPlane(out, 0, m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12])
+	setFrustumPlane(out, 4, m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12])
+	// bottom/top
+	setFrustumPlane(out, 8, m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13])
+	setFrustumPlane(out, 12, m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13])
+	// near/far
+	setFrustumPlane(out, 16, m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14])
+	setFrustumPlane(out, 20, m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14])
+}
+
+function aabbVisibleInFrustum(bounds, planes) {
+	for (let i = 0; i < 24; i += 4) {
+		const nx = planes[i + 0]
+		const ny = planes[i + 1]
+		const nz = planes[i + 2]
+		const d = planes[i + 3]
+		const px = nx >= 0 ? bounds.maxX : bounds.minX
+		const py = ny >= 0 ? bounds.maxY : bounds.minY
+		const pz = nz >= 0 ? bounds.maxZ : bounds.minZ
+		if (nx * px + ny * py + nz * pz + d < 0) {
+			return false
+		}
+	}
+	return true
 }
 
 export class Renderer {
 	constructor(gl) {
 		this.gl = gl
 		this.program = null
-		this.vao = null
-		this.vbo = null
+		this.singleMesh = null
+		this.chunkMeshes = new Map()
+		this.totalVertexCount = 0
+		this.totalTriangleCount = 0
+		this.totalVoxelCount = 0
 		this.vertexCount = 0
 		this.triangleCount = 0
 		this.drawCalls = 0
+		this.visibility = {
+			totalChunks: 0,
+			visibleChunks: 0,
+			culledChunks: 0,
+			visibleTriangles: 0,
+		}
 		this.viewProj = createMat4()
 		this.view = createMat4()
 		this.proj = createMat4()
 		this.model = createMat4()
 		this.uViewProj = null
+		this.frustumPlanes = new Float32Array(24)
 	}
 
 	init() {
 		const gl = this.gl
 		this.program = createProgram(gl, VERTEX_SOURCE, FRAGMENT_SOURCE)
 		this.uViewProj = gl.getUniformLocation(this.program, 'u_view_proj')
-		this.vao = gl.createVertexArray()
-		this.vbo = gl.createBuffer()
 		mat4Identity(this.model)
-
-		gl.bindVertexArray(this.vao)
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
-		gl.enableVertexAttribArray(0)
-		gl.enableVertexAttribArray(1)
-		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0)
-		gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12)
-		gl.bindVertexArray(null)
 
 		gl.enable(gl.DEPTH_TEST)
 		gl.enable(gl.CULL_FACE)
@@ -150,22 +241,168 @@ export class Renderer {
 		gl.clearColor(0.05, 0.08, 0.1, 1.0)
 	}
 
-	uploadVoxels(voxels, { voxelSize = 1 } = {}) {
+	createMeshFromVoxels(voxels, voxelSize = 1) {
 		const gl = this.gl
 		const meshStart = performance.now()
-		const vertices = buildVoxelVertices(voxels, voxelSize)
+		const { vertices, triangleCount, bounds } = buildExposedVoxelVertices(
+			voxels,
+			voxelSize,
+		)
 		const meshGenerationMs = performance.now() - meshStart
 
-		gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo)
+		const vao = gl.createVertexArray()
+		const vbo = gl.createBuffer()
+		gl.bindVertexArray(vao)
+		gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
 		gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+		gl.enableVertexAttribArray(0)
+		gl.enableVertexAttribArray(1)
+		gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0)
+		gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12)
+		gl.bindVertexArray(null)
 		gl.bindBuffer(gl.ARRAY_BUFFER, null)
 
-		this.vertexCount = vertices.length / 6
-		this.triangleCount = this.vertexCount / 3
+		const vertexCount = vertices.length / 6
+		return {
+			vao,
+			vbo,
+			vertexCount,
+			triangleCount,
+			voxelCount: voxels.length,
+			bounds,
+			meshGenerationMs,
+		}
+	}
+
+	disposeMesh(mesh) {
+		if (!mesh) {
+			return
+		}
+		this.gl.deleteBuffer(mesh.vbo)
+		this.gl.deleteVertexArray(mesh.vao)
+	}
+
+	disposeAllChunkMeshes() {
+		for (const mesh of this.chunkMeshes.values()) {
+			this.disposeMesh(mesh)
+		}
+		this.chunkMeshes.clear()
+	}
+
+	recomputeTotals() {
+		let vertices = 0
+		let triangles = 0
+		let voxels = 0
+		if (this.singleMesh) {
+			vertices += this.singleMesh.vertexCount
+			triangles += this.singleMesh.triangleCount
+			voxels += this.singleMesh.voxelCount
+		}
+		for (const mesh of this.chunkMeshes.values()) {
+			vertices += mesh.vertexCount
+			triangles += mesh.triangleCount
+			voxels += mesh.voxelCount
+		}
+		this.totalVertexCount = vertices
+		this.totalTriangleCount = triangles
+		this.totalVoxelCount = voxels
+	}
+
+	uploadVoxels(voxels, { voxelSize = 1 } = {}) {
+		if (this.singleMesh) {
+			this.disposeMesh(this.singleMesh)
+			this.singleMesh = null
+		}
+		this.disposeAllChunkMeshes()
+		this.singleMesh = this.createMeshFromVoxels(voxels, voxelSize)
+		this.recomputeTotals()
+		return {
+			meshGenerationMs: this.singleMesh.meshGenerationMs,
+			vertexCount: this.singleMesh.vertexCount,
+			triangleCount: this.singleMesh.triangleCount,
+			voxelCount: this.singleMesh.voxelCount,
+			chunkCount: 0,
+		}
+	}
+
+	replaceChunks(chunks, { voxelSize = 1 } = {}) {
+		if (this.singleMesh) {
+			this.disposeMesh(this.singleMesh)
+			this.singleMesh = null
+		}
+		this.disposeAllChunkMeshes()
+		let meshGenerationMs = 0
+		for (const chunk of chunks) {
+			const id = String(chunk.id)
+			const voxels = Array.isArray(chunk.voxels) ? chunk.voxels : []
+			const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+			meshGenerationMs += mesh.meshGenerationMs
+			this.chunkMeshes.set(id, mesh)
+		}
+		this.recomputeTotals()
 		return {
 			meshGenerationMs,
-			vertexCount: this.vertexCount,
-			triangleCount: this.triangleCount,
+			vertexCount: this.totalVertexCount,
+			triangleCount: this.totalTriangleCount,
+			voxelCount: this.totalVoxelCount,
+			chunkCount: this.chunkMeshes.size,
+		}
+	}
+
+	upsertChunks(chunks, { voxelSize = 1 } = {}) {
+		let meshGenerationMs = 0
+		let updatedCount = 0
+		for (const chunk of chunks) {
+			const id = String(chunk.id)
+			const voxels = Array.isArray(chunk.voxels) ? chunk.voxels : []
+			const existing = this.chunkMeshes.get(id)
+			if (existing) {
+				this.disposeMesh(existing)
+			}
+			const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+			meshGenerationMs += mesh.meshGenerationMs
+			this.chunkMeshes.set(id, mesh)
+			updatedCount += 1
+		}
+		this.recomputeTotals()
+		return {
+			meshGenerationMs,
+			updatedChunkCount: updatedCount,
+			chunkCount: this.chunkMeshes.size,
+			vertexCount: this.totalVertexCount,
+			triangleCount: this.totalTriangleCount,
+			voxelCount: this.totalVoxelCount,
+		}
+	}
+
+	removeChunks(chunkIds) {
+		let removedCount = 0
+		for (const chunkId of chunkIds) {
+			const id = String(chunkId)
+			const existing = this.chunkMeshes.get(id)
+			if (!existing) {
+				continue
+			}
+			this.disposeMesh(existing)
+			this.chunkMeshes.delete(id)
+			removedCount += 1
+		}
+		this.recomputeTotals()
+		return {
+			removedChunkCount: removedCount,
+			chunkCount: this.chunkMeshes.size,
+			vertexCount: this.totalVertexCount,
+			triangleCount: this.totalTriangleCount,
+			voxelCount: this.totalVoxelCount,
+		}
+	}
+
+	getWorldStats() {
+		return {
+			vertexCount: this.totalVertexCount,
+			triangleCount: this.totalTriangleCount,
+			voxelCount: this.totalVoxelCount,
+			chunkCount: this.chunkMeshes.size,
 		}
 	}
 
@@ -184,12 +421,67 @@ export class Renderer {
 		mat4Perspective(this.proj, (55 * Math.PI) / 180, aspect, 0.1, 5000.0)
 		mat4LookAt(this.view, camera.position, camera.target, camera.up)
 		mat4Multiply(this.viewProj, this.proj, this.view)
+		extractFrustumPlanes(this.frustumPlanes, this.viewProj)
 
 		gl.useProgram(this.program)
 		gl.uniformMatrix4fv(this.uViewProj, false, this.viewProj)
-		gl.bindVertexArray(this.vao)
-		gl.drawArrays(gl.TRIANGLES, 0, this.vertexCount)
-		gl.bindVertexArray(null)
-		this.drawCalls = this.vertexCount > 0 ? 1 : 0
+
+		if (this.chunkMeshes.size > 0) {
+			let visibleChunks = 0
+			let culledChunks = 0
+			let visibleTriangles = 0
+			for (const mesh of this.chunkMeshes.values()) {
+				if (
+					mesh.bounds &&
+					!aabbVisibleInFrustum(mesh.bounds, this.frustumPlanes)
+				) {
+					culledChunks += 1
+					continue
+				}
+				visibleChunks += 1
+				if (mesh.vertexCount <= 0) {
+					continue
+				}
+				gl.bindVertexArray(mesh.vao)
+				gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount)
+				this.drawCalls += 1
+				visibleTriangles += mesh.triangleCount
+			}
+			gl.bindVertexArray(null)
+			this.vertexCount = this.totalVertexCount
+			this.triangleCount = visibleTriangles
+			this.visibility = {
+				totalChunks: this.chunkMeshes.size,
+				visibleChunks,
+				culledChunks,
+				visibleTriangles,
+			}
+			return
+		}
+
+		if (this.singleMesh && this.singleMesh.vertexCount > 0) {
+			gl.bindVertexArray(this.singleMesh.vao)
+			gl.drawArrays(gl.TRIANGLES, 0, this.singleMesh.vertexCount)
+			gl.bindVertexArray(null)
+			this.drawCalls = 1
+			this.vertexCount = this.singleMesh.vertexCount
+			this.triangleCount = this.singleMesh.triangleCount
+			this.visibility = {
+				totalChunks: 0,
+				visibleChunks: 0,
+				culledChunks: 0,
+				visibleTriangles: this.singleMesh.triangleCount,
+			}
+			return
+		}
+
+		this.vertexCount = 0
+		this.triangleCount = 0
+		this.visibility = {
+			totalChunks: 0,
+			visibleChunks: 0,
+			culledChunks: 0,
+			visibleTriangles: 0,
+		}
 	}
 }

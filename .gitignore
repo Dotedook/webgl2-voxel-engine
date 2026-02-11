@@ -1,0 +1,5 @@
+*.DS_Store
+benchmark-results/
+TCC_Eduardo_Kuhn.pdf
+tcc_extract.txt
+assets/sibenik.bin3

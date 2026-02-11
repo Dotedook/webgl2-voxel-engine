@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxel Engine MVP</title>
+    <style>
+      :root {
+        --bg: #0f1417;
+        --fg: #ecf2f5;
+        --panel: #1a2328cc;
+        --accent: #72e8b4;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: radial-gradient(circle at 20% 10%, #1f2d33, #0f1417 55%);
+        color: var(--fg);
+        font-family: "SF Mono", "Menlo", "Monaco", monospace;
+      }
+
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      #app-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      #start-screen {
+        position: absolute;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: radial-gradient(circle at 80% 15%, #26465344, #0f1417ee 60%);
+        z-index: 20;
+      }
+
+      #start-screen.enabled {
+        display: flex;
+      }
+
+      #start-card {
+        width: min(940px, 100%);
+        background: #141d22e6;
+        border: 1px solid #31414a;
+        border-radius: 12px;
+        padding: 18px;
+        backdrop-filter: blur(6px);
+      }
+
+      #start-card h1 {
+        margin: 0 0 10px;
+        color: var(--accent);
+        font-size: 22px;
+      }
+
+      #start-card p {
+        margin: 0 0 14px;
+        color: #c7d9df;
+        font-size: 13px;
+      }
+
+      .start-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 10px;
+      }
+
+      .start-box {
+        background: #1b2830c9;
+        border: 1px solid #31414a;
+        border-radius: 8px;
+        padding: 10px;
+      }
+
+      .start-box h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        color: #9fe7c8;
+      }
+
+      .start-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 6px 0;
+      }
+
+      .start-row input,
+      .start-row select,
+      .start-box button {
+        font-size: 12px;
+      }
+
+      .start-box button {
+        width: 100%;
+        margin-top: 6px;
+        background: #203139;
+        color: var(--fg);
+        border: 1px solid #3c5967;
+        border-radius: 6px;
+        padding: 7px 8px;
+        cursor: pointer;
+      }
+
+      .start-box button:hover {
+        border-color: #6ac5e8;
+      }
+
+      #hud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: var(--panel);
+        backdrop-filter: blur(4px);
+        border: 1px solid #31414a;
+        border-radius: 8px;
+        padding: 10px 12px;
+        max-width: 360px;
+        pointer-events: none;
+      }
+
+      #hud strong {
+        color: var(--accent);
+      }
+
+      #benchmark-panel {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        width: 360px;
+        background: var(--panel);
+        backdrop-filter: blur(4px);
+        border: 1px solid #31414a;
+        border-radius: 8px;
+        padding: 10px 12px;
+        display: none;
+      }
+
+      #benchmark-panel.enabled {
+        display: block;
+      }
+
+      #benchmark-panel h2 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        color: var(--accent);
+      }
+
+      #benchmark-panel label,
+      #benchmark-panel button,
+      #benchmark-panel select,
+      #benchmark-panel input {
+        font-size: 12px;
+      }
+
+      #benchmark-panel button {
+        background: #203139;
+        color: var(--fg);
+        border: 1px solid #3c5967;
+        border-radius: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+      }
+
+      #benchmark-panel button:hover {
+        border-color: #6ac5e8;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 6px 0;
+      }
+
+      #benchmark-output {
+        margin-top: 8px;
+        max-height: 240px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-size: 11px;
+        border-top: 1px solid #31414a;
+        padding-top: 8px;
+      }
+
+      #benchmark-live {
+        margin-top: 8px;
+        white-space: pre-wrap;
+        font-size: 11px;
+        line-height: 1.35;
+        border-top: 1px solid #31414a;
+        padding-top: 8px;
+        color: #d8e9f2;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="app-canvas"></canvas>
+      <div id="start-screen">
+        <div id="start-card">
+          <h1>Voxel Engine MVP</h1>
+          <p>Escolha um cenário para iniciar ou entre direto no modo benchmark.</p>
+          <div class="start-grid">
+            <div class="start-box">
+              <h3>Small (.vox)</h3>
+              <div class="start-row">
+                <label for="start-vox-url">VOX URL</label>
+                <input
+                  id="start-vox-url"
+                  type="text"
+                  value="/assets/chr_old.vox"
+                  style="width: 170px"
+                />
+              </div>
+              <button id="start-small-btn">Iniciar Small</button>
+            </div>
+            <div class="start-box">
+              <h3>Cenário 2 (Procedural)</h3>
+              <div class="start-row">
+                <label for="start-medium-seed">Seed</label>
+                <input id="start-medium-seed" type="number" value="1337" style="width: 110px" />
+              </div>
+              <button id="start-medium-btn">Iniciar Medium</button>
+            </div>
+            <div class="start-box">
+              <h3>Cenário 3 (Catedral)</h3>
+              <div class="start-row">
+                <label for="start-large-seed">Seed</label>
+                <input id="start-large-seed" type="number" value="1337" style="width: 110px" />
+              </div>
+              <div class="start-row">
+                <label for="start-bin3-url">BIN3 URL</label>
+                <input
+                  id="start-bin3-url"
+                  type="text"
+                  value="/assets/sibenik_sample.bin3"
+                  style="width: 170px"
+                />
+              </div>
+              <button id="start-large-btn">Iniciar Large</button>
+            </div>
+            <div class="start-box">
+              <h3>Benchmark</h3>
+              <div class="start-row">
+                <label for="start-benchmark-scenario">Cenário</label>
+                <select id="start-benchmark-scenario" style="width: 120px">
+                  <option value="small">small (.vox)</option>
+                  <option value="medium" selected>cenário 2</option>
+                  <option value="large">cenário 3</option>
+                </select>
+              </div>
+              <div class="start-row">
+                <label for="start-benchmark-seed">Seed (m/l)</label>
+                <input
+                  id="start-benchmark-seed"
+                  type="number"
+                  value="1337"
+                  style="width: 110px"
+                />
+              </div>
+              <button id="start-benchmark-btn">Abrir Benchmark</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="hud">
+        <div><strong>Voxel Engine MVP</strong></div>
+        <div>W/A/S/D: mover | Mouse: olhar | Space/Shift: subir/descer</div>
+        <div>Clique no canvas para capturar o mouse</div>
+        <div id="status-line">Carregando...</div>
+      </div>
+      <div id="benchmark-panel">
+        <h2>Benchmark</h2>
+        <div class="row">
+          <label for="scenario-select">Cenário</label>
+          <select id="scenario-select">
+            <option value="small">small (.vox)</option>
+            <option value="medium" selected>cenário 2 (procedural)</option>
+            <option value="large">cenário 3 (catedral)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="seed-input">Seed</label>
+          <input id="seed-input" type="number" value="1337" />
+        </div>
+        <div class="row">
+          <label for="vox-url-input">VOX URL (small)</label>
+          <input
+            id="vox-url-input"
+            type="text"
+            value="/assets/chr_old.vox"
+            placeholder="/assets/model.vox"
+            style="width: 210px"
+          />
+        </div>
+        <div class="row">
+          <label for="bin3-url-input">BIN3 URL (large)</label>
+          <input
+            id="bin3-url-input"
+            type="text"
+            value="/assets/sibenik_sample.bin3"
+            placeholder="/assets/sibenik_sample.bin3"
+            style="width: 210px"
+          />
+        </div>
+        <div class="row">
+          <label for="warmup-input">Warmup (ms)</label>
+          <input id="warmup-input" type="number" value="10000" />
+        </div>
+        <div class="row">
+          <label for="collect-input">Coleta (ms)</label>
+          <input id="collect-input" type="number" value="60000" />
+        </div>
+        <div class="row">
+          <label for="repeat-input">Repetições</label>
+          <input id="repeat-input" type="number" value="3" min="1" max="10" />
+        </div>
+        <div class="row">
+          <button id="run-once-btn">Executar 1x</button>
+          <button id="run-suite-btn">Executar suíte</button>
+          <button id="download-btn">Baixar JSON</button>
+        </div>
+        <div id="benchmark-live">Métricas ao vivo: aguardando frames...</div>
+        <div id="benchmark-output">Aguardando execução...</div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

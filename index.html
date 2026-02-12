@@ -253,6 +253,7 @@
                 />
               </div>
               <button id="start-large-btn">Iniciar Large</button>
+              <button id="start-xlarge-btn">Iniciar XLarge (stress)</button>
             </div>
             <div class="start-box">
               <h3>Benchmark</h3>
@@ -262,10 +263,11 @@
                   <option value="small">small (.vox)</option>
                   <option value="medium" selected>cenário 2</option>
                   <option value="large">cenário 3</option>
+                  <option value="xlarge">cenário 4 (stress)</option>
                 </select>
               </div>
               <div class="start-row">
-                <label for="start-benchmark-seed">Seed (m/l)</label>
+                <label for="start-benchmark-seed">Seed (m/l/xl)</label>
                 <input
                   id="start-benchmark-seed"
                   type="number"
@@ -280,9 +282,11 @@
       </div>
       <div id="hud">
         <div><strong>Voxel Engine MVP</strong></div>
-        <div>W/A/S/D: mover | Mouse: olhar | Space/Shift: subir/descer</div>
+        <div>W/A/S/D: mover | Mouse: olhar | Space/Shift: subir/descer | Alt: turbo</div>
+        <div>R: gravar trajeto | L: baixar trajeto | C: limpar | K: marcar ponto</div>
         <div>Clique no canvas para capturar o mouse</div>
         <div id="status-line">Carregando...</div>
+        <div id="recorder-line"></div>
       </div>
       <div id="benchmark-panel">
         <h2>Benchmark</h2>
@@ -292,6 +296,7 @@
             <option value="small">small (.vox)</option>
             <option value="medium" selected>cenário 2 (procedural)</option>
             <option value="large">cenário 3 (catedral)</option>
+            <option value="xlarge">cenário 4 (catedral full/stress)</option>
           </select>
         </div>
         <div class="row">
@@ -309,7 +314,7 @@
           />
         </div>
         <div class="row">
-          <label for="bin3-url-input">BIN3 URL (large)</label>
+          <label for="bin3-url-input">BIN3 URL (large/xlarge)</label>
           <input
             id="bin3-url-input"
             type="text"

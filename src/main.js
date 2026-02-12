@@ -53,6 +53,146 @@ function inputSeedOr(input, fallback = 1337) {
 	return sanitizeSeed(input.value, fallback)
 }
 
+function downloadJsonFile(filename, payload) {
+	const blob = new Blob([JSON.stringify(payload, null, 2)], {
+		type: 'application/json',
+	})
+	const url = URL.createObjectURL(blob)
+	const anchor = document.createElement('a')
+	anchor.href = url
+	anchor.download = filename
+	anchor.click()
+	URL.revokeObjectURL(url)
+}
+
+function setupMovementRecorder({ engine, scenarioId, seed, voxUrl, bin3Url }) {
+	const recorderLine = document.getElementById('recorder-line')
+	if (!recorderLine) {
+		return
+	}
+
+	const enabled = scenarioId === 'large' || scenarioId === 'xlarge'
+	if (!enabled) {
+		recorderLine.textContent = ''
+		return
+	}
+
+	const state = {
+		active: false,
+		createdAt: new Date().toISOString(),
+		startedAt: null,
+		sampleIntervalMs: 100,
+		lastSampleElapsed: -Infinity,
+		samples: [],
+	}
+
+	function cameraPoint(type = 'sample', elapsedSeconds = null) {
+		const pos = engine.camera.position
+		const elapsed =
+			typeof elapsedSeconds === 'number'
+				? elapsedSeconds
+				: engine.getFrameMetrics().elapsedSeconds || 0
+		return {
+			type,
+			i: state.samples.length + 1,
+			wallTimeIso: new Date().toISOString(),
+			elapsedSeconds: Number(elapsed.toFixed(6)),
+			x: Number(pos[0].toFixed(4)),
+			y: Number(pos[1].toFixed(4)),
+			z: Number(pos[2].toFixed(4)),
+			yaw: Number(engine.camera.yaw.toFixed(6)),
+			pitch: Number(engine.camera.pitch.toFixed(6)),
+		}
+	}
+
+	function updateRecorderLine() {
+		const pos = engine.camera.position
+		const status = state.active ? 'gravando' : 'parado'
+		recorderLine.textContent =
+			'Recorder (' +
+			scenarioId +
+			'): ' +
+			status +
+			' | pontos: ' +
+			state.samples.length +
+			' | pos: [' +
+			pos[0].toFixed(1) +
+			', ' +
+			pos[1].toFixed(1) +
+			', ' +
+			pos[2].toFixed(1) +
+			']'
+	}
+
+	function downloadRecording() {
+		const payload = {
+			kind: 'camera_path',
+			createdAt: state.createdAt,
+			startedAt: state.startedAt,
+			exportedAt: new Date().toISOString(),
+			scenarioId,
+			seed,
+			voxUrl,
+			bin3Url,
+			sampleIntervalMs: state.sampleIntervalMs,
+			totalSamples: state.samples.length,
+			samples: state.samples,
+		}
+		const filename =
+			'camera-path-' + scenarioId + '-' + Date.now().toString() + '.json'
+		downloadJsonFile(filename, payload)
+	}
+
+	engine.onFrame((frame) => {
+		if (!state.active) {
+			updateRecorderLine()
+			return
+		}
+		const elapsed = frame.elapsedSeconds || 0
+		if (
+			state.samples.length === 0 ||
+			elapsed - state.lastSampleElapsed >= state.sampleIntervalMs / 1000
+		) {
+			state.lastSampleElapsed = elapsed
+			state.samples.push(cameraPoint('sample', elapsed))
+		}
+		updateRecorderLine()
+	})
+
+	window.addEventListener('keydown', (event) => {
+		if (event.repeat) {
+			return
+		}
+		if (event.code === 'KeyR') {
+			state.active = !state.active
+			if (state.active && !state.startedAt) {
+				state.startedAt = new Date().toISOString()
+				state.lastSampleElapsed = -Infinity
+			}
+			updateRecorderLine()
+			return
+		}
+		if (event.code === 'KeyK') {
+			state.samples.push(cameraPoint('marker'))
+			updateRecorderLine()
+			return
+		}
+		if (event.code === 'KeyC') {
+			state.active = false
+			state.samples = []
+			state.lastSampleElapsed = -Infinity
+			updateRecorderLine()
+			return
+		}
+		if (event.code === 'KeyL') {
+			downloadRecording()
+			updateRecorderLine()
+		}
+	})
+
+	updateRecorderLine()
+}
+
 function setupStartScreen() {
 	const startScreen = document.getElementById('start-screen')
 	const canvas = document.getElementById('app-canvas')
@@ -96,6 +236,16 @@ function setupStartScreen() {
 	document.getElementById('start-large-btn').addEventListener('click', () => {
 		openRun({
 			scenarioId: 'large',
+			seed: inputSeedOr(startLargeSeed, 1337),
+			voxUrl: inputValueOr(startVoxUrl, DEFAULT_SMALL_VOX_URL),
+			bin3Url: inputValueOr(startBin3Url, DEFAULT_CATHEDRAL_BIN3_URL),
+			benchmark: false,
+		})
+	})
+
+	document.getElementById('start-xlarge-btn').addEventListener('click', () => {
+		openRun({
+			scenarioId: 'xlarge',
 			seed: inputSeedOr(startLargeSeed, 1337),
 			voxUrl: inputValueOr(startVoxUrl, DEFAULT_SMALL_VOX_URL),
 			bin3Url: inputValueOr(startBin3Url, DEFAULT_CATHEDRAL_BIN3_URL),
@@ -167,6 +317,7 @@ async function main() {
 		loadMetrics.chunkCount
 
 	if (!benchmarkMode) {
+		setupMovementRecorder({ engine, scenarioId, seed, voxUrl, bin3Url })
 		return
 	}
 

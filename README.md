@@ -8,10 +8,13 @@ MVP inicial com:
   - legado por `voxels` (malha unica),
   - chunkado por `chunks` com atualizacao incremental (`upsert/remove`).
 - Frustum culling por AABB de chunk.
-- Modulo de cenarios (`small`, `medium`, `large`) com seed fixa.
+- Modulo de cenarios (`small`, `medium`, `large`, `xlarge`) com seed fixa.
   - `small`: modelo `.vox` (personagem).
-  - `medium` (cenario 2): terreno procedural com streaming incremental por chunks.
-  - `large` (cenario 3): catedral a partir de `.bin3` (Sibenik).
+  - `medium` (cenario 2): terreno procedural com janela de chunks ampla (sensacao quase infinita).
+  - `large` (cenario 3): catedral a partir de `.bin3` sample.
+  - `xlarge` (cenario 4): catedral stress/qualidade (prioriza `/assets/sibenik.bin3`, com fallback para sample).
+  - `large` e `xlarge`: velocidade de camera manual (WASD/Space/Shift) aumentada para navegacao em cena grande.
+  - `large` e `xlarge`: recorder de trajeto manual (`R` gravar, `L` baixar JSON, `C` limpar, `K` marcar ponto).
 - Modulo de benchmark separado com:
   - coletor proprio (frame delta, frame CPU, FPS, update, heap, chunks visiveis/culled),
   - painel de metricas ao vivo interno (sem dependencias externas),
@@ -82,6 +85,10 @@ Formato esperado:
 - cada ponto: 10 bytes (`x,y,z` como `uint16`, `r,g,b` como `uint8`, 1 byte padding)
 
 No benchmark (`?benchmark=1`), o campo `BIN3 URL (large)` permite trocar o arquivo.
+
+Para stress test (`xlarge`), se `BIN3 URL` estiver vazio ou apontando para o sample,
+o loader tenta `'/assets/sibenik.bin3'` primeiro.
+No `xlarge`, o loader usa amostragem maior e preenchimento de lacunas (`fillGaps`) para visual mais denso.
 
 ## API da engine para benchmark
 

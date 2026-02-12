@@ -127,14 +127,44 @@ function computeBoundsFromVoxels(voxels, voxelSize) {
 function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	const scale = Math.max(0.2, voxelSize)
 	const offset = (1 - scale) * 0.5
-	const values = []
 	const occupancy = new Set()
 
 	for (const voxel of voxels) {
 		occupancy.add(voxelKey(voxel.x, voxel.y, voxel.z))
 	}
 
+	let exposedFaceCount = 0
+	for (const voxel of voxels) {
+		for (let face = 0; face < CUBE_FACES.length; face += 1) {
+			const dir = FACE_NEIGHBORS[face]
+			const neighborKey = voxelKey(
+				voxel.x + dir[0],
+				voxel.y + dir[1],
+				voxel.z + dir[2],
+			)
+			if (occupancy.has(neighborKey)) {
+				continue
+			}
+			exposedFaceCount += 1
+		}
+	}
+
+	// Cada face exposta gera 6 vertices; cada vertice tem 6 floats (posicao + cor).
+	const floatsPerFace = 36
+	const totalFloats = exposedFaceCount * floatsPerFace
+	// Evita alocacoes impraticaveis e erro obscuro de "Invalid array length".
+	const maxReasonableFloats = 1_600_000_000
+	if (totalFloats > maxReasonableFloats) {
+		throw new Error(
+			'Cena grande demais para meshing atual (' +
+				totalFloats +
+				' floats). Reduza densidade (voxelScale/limites).',
+		)
+	}
+	const values = new Float32Array(totalFloats)
+	let ptr = 0
 	let triangleCount = 0
+
 	for (const voxel of voxels) {
 		const [cr, cg, cb] = normalizeColor(voxel.color)
 		for (let face = 0; face < CUBE_FACES.length; face += 1) {
@@ -150,17 +180,19 @@ function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 			const corners = CUBE_FACES[face]
 			for (let tri = 0; tri < FACE_TRIANGLE_ORDER.length; tri += 1) {
 				const cornerIndex = FACE_TRIANGLE_ORDER[tri] * 3
-				values.push(voxel.x + corners[cornerIndex + 0] * scale + offset)
-				values.push(voxel.y + corners[cornerIndex + 1] * scale + offset)
-				values.push(voxel.z + corners[cornerIndex + 2] * scale + offset)
-				values.push(cr, cg, cb)
+				values[ptr++] = voxel.x + corners[cornerIndex + 0] * scale + offset
+				values[ptr++] = voxel.y + corners[cornerIndex + 1] * scale + offset
+				values[ptr++] = voxel.z + corners[cornerIndex + 2] * scale + offset
+				values[ptr++] = cr
+				values[ptr++] = cg
+				values[ptr++] = cb
 			}
 			triangleCount += 2
 		}
 	}
 
 	return {
-		vertices: new Float32Array(values),
+		vertices: values,
 		triangleCount,
 		bounds: computeBoundsFromVoxels(voxels, voxelSize),
 	}

@@ -7,9 +7,33 @@ export class InputController {
 		this.mouseDeltaX = 0
 		this.mouseDeltaY = 0
 		this.lookSpeed = 0.0028
-		this.moveSpeed = 8
-		this.verticalSpeed = 6
+		this.defaultMoveSpeed = 8
+		this.defaultVerticalSpeed = 6
+		this.moveSpeed = this.defaultMoveSpeed
+		this.verticalSpeed = this.defaultVerticalSpeed
+		this.turboMultiplier = 3.2
 		this.pointerLocked = false
+	}
+
+	setMovementSpeeds({ moveSpeed, verticalSpeed } = {}) {
+		if (
+			typeof moveSpeed === 'number' &&
+			Number.isFinite(moveSpeed) &&
+			moveSpeed > 0
+		) {
+			this.moveSpeed = moveSpeed
+		} else {
+			this.moveSpeed = this.defaultMoveSpeed
+		}
+		if (
+			typeof verticalSpeed === 'number' &&
+			Number.isFinite(verticalSpeed) &&
+			verticalSpeed > 0
+		) {
+			this.verticalSpeed = verticalSpeed
+		} else {
+			this.verticalSpeed = this.defaultVerticalSpeed
+		}
 	}
 
 	init() {
@@ -57,8 +81,12 @@ export class InputController {
 
 		const rightX = -fz
 		const rightZ = fx
-		const moveStep = this.moveSpeed * dtSeconds
-		const yStep = this.verticalSpeed * dtSeconds
+		const turbo =
+			this.keys.has('AltLeft') || this.keys.has('AltRight')
+				? this.turboMultiplier
+				: 1
+		const moveStep = this.moveSpeed * turbo * dtSeconds
+		const yStep = this.verticalSpeed * turbo * dtSeconds
 
 		if (this.keys.has('KeyW')) {
 			camera.position[0] += fx * moveStep

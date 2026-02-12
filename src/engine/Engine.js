@@ -122,6 +122,10 @@ export class Engine {
 			typeof scenario.updateWorld === 'function' ? scenario.updateWorld : null
 		this.scenarioVoxelSize =
 			typeof scenario.voxelSize === 'number' ? scenario.voxelSize : 1
+		this.input.setMovementSpeeds({
+			moveSpeed: scenario.cameraMoveSpeed,
+			verticalSpeed: scenario.cameraVerticalSpeed,
+		})
 		if (scenario.cameraStart) {
 			this.camera.position[0] = scenario.cameraStart.position[0]
 			this.camera.position[1] = scenario.cameraStart.position[1]

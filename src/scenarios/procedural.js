@@ -37,7 +37,11 @@ function createPlaneScenario(
 				voxels.push({ x, y, z, color })
 			}
 
-			if (pillarSpacing > 0 && x % pillarSpacing === 0 && z % pillarSpacing === 0) {
+			if (
+				pillarSpacing > 0 &&
+				x % pillarSpacing === 0 &&
+				z % pillarSpacing === 0
+			) {
 				const pillarHeight = 2 + ((Math.abs(x * 31 + z * 17 + seed) >> 1) % 5)
 				for (let y = h; y < h + pillarHeight; y += 1) {
 					voxels.push({ x, y, z, color: accent })
@@ -61,7 +65,8 @@ function createPlaneScenario(
 			const walkSpeed = 9.5
 			const progress = (elapsedSeconds * walkSpeed) % pathLen
 			camera.position[0] = Math.sin(elapsedSeconds * 0.22) * (width * 0.08)
-			camera.position[1] = maxHeight * 1.2 + 4 + Math.sin(elapsedSeconds * 4.2) * 0.25
+			camera.position[1] =
+				maxHeight * 1.2 + 4 + Math.sin(elapsedSeconds * 4.2) * 0.25
 			camera.position[2] = -halfD + 6 + progress
 			camera.yaw = Math.PI * 0.5 + Math.sin(elapsedSeconds * 0.35) * 0.04
 			camera.pitch = -0.18
@@ -86,10 +91,17 @@ function buildTerrainColumnVoxels({ x, z, seed, topA, topB, soil, rock }) {
 	return voxels
 }
 
-function createStreamingChunk({ chunkIndex, chunkDepth, width, seed }) {
+function createStreamingChunk({
+	chunkX,
+	chunkZ,
+	chunkWidth,
+	chunkDepth,
+	seed,
+}) {
 	const voxels = []
-	const halfW = Math.floor(width / 2)
-	const zStart = chunkIndex * chunkDepth
+	const xStart = chunkX * chunkWidth
+	const xEnd = xStart + chunkWidth
+	const zStart = chunkZ * chunkDepth
 	const zEnd = zStart + chunkDepth
 	const topA = toColor(0x7bd88f)
 	const topB = toColor(0x79a8ff)
@@ -97,7 +109,7 @@ function createStreamingChunk({ chunkIndex, chunkDepth, width, seed }) {
 	const rock = toColor(0x8d8d8d)
 
 	for (let z = zStart; z < zEnd; z += 1) {
-		for (let x = -halfW; x < halfW; x += 1) {
+		for (let x = xStart; x < xEnd; x += 1) {
 			const column = buildTerrainColumnVoxels({
 				x,
 				z,
@@ -115,13 +127,13 @@ function createStreamingChunk({ chunkIndex, chunkDepth, width, seed }) {
 	return voxels
 }
 
-function toChunkId(chunkIndex) {
-	return 'z' + chunkIndex
+function toChunkId(chunkX, chunkZ) {
+	return 'x' + chunkX + '_z' + chunkZ
 }
 
-function chunkRecord(chunkIndex, voxels) {
+function chunkRecord(chunkX, chunkZ, voxels) {
 	return {
-		id: toChunkId(chunkIndex),
+		id: toChunkId(chunkX, chunkZ),
 		voxels,
 	}
 }
@@ -161,30 +173,43 @@ export function createSmallFallbackScenario() {
 }
 
 export function createMediumScenario(seed) {
-	const width = 72
-	const chunkDepth = 24
-	const behindChunks = 1
-	const aheadChunks = 4
-	const walkSpeed = 9.5
-	let centerChunk = 0
+	const chunkWidth = 32
+	const chunkDepth = 32
+	const sideChunks = 16
+	const behindChunks = 4
+	const aheadChunks = 32
+	const walkSpeed = 10.5
+	const lateralSpan = chunkWidth * 2.6
+	let centerChunkX = 0
+	let centerChunkZ = 0
 	const activeChunks = new Map()
+	const initialHeight = 15
 
-	function ensureWindow(nextCenterChunk) {
+	function ensureWindow(nextCenterChunkX, nextCenterChunkZ) {
 		const upserts = []
 		for (
-			let chunkIndex = nextCenterChunk - behindChunks;
-			chunkIndex <= nextCenterChunk + aheadChunks;
-			chunkIndex += 1
+			let chunkZ = nextCenterChunkZ - behindChunks;
+			chunkZ <= nextCenterChunkZ + aheadChunks;
+			chunkZ += 1
 		) {
-			if (!activeChunks.has(chunkIndex)) {
+			for (
+				let chunkX = nextCenterChunkX - sideChunks;
+				chunkX <= nextCenterChunkX + sideChunks;
+				chunkX += 1
+			) {
+				const chunkId = toChunkId(chunkX, chunkZ)
+				if (activeChunks.has(chunkId)) {
+					continue
+				}
 				const voxels = createStreamingChunk({
-					chunkIndex,
+					chunkX,
+					chunkZ,
+					chunkWidth,
 					chunkDepth,
-					width,
 					seed,
 				})
-				activeChunks.set(chunkIndex, voxels)
-				upserts.push(chunkRecord(chunkIndex, voxels))
+				activeChunks.set(chunkId, voxels)
+				upserts.push(chunkRecord(chunkX, chunkZ, voxels))
 			}
 		}
 		return {
@@ -193,11 +218,11 @@ export function createMediumScenario(seed) {
 		}
 	}
 
-	ensureWindow(centerChunk)
-	const initialChunks = [...activeChunks.entries()].map(([chunkIndex, voxels]) =>
-		chunkRecord(chunkIndex, voxels),
-	)
-	const initialHeight = 15
+	ensureWindow(centerChunkX, centerChunkZ)
+	const initialChunks = [...activeChunks.entries()].map(([id, voxels]) => ({
+		id,
+		voxels,
+	}))
 
 	return {
 		id: 'medium',
@@ -208,17 +233,22 @@ export function createMediumScenario(seed) {
 			pitch: -0.18,
 		},
 		cameraScript: (camera, elapsedSeconds) => {
-			camera.position[0] = Math.sin(elapsedSeconds * 0.22) * (width * 0.08)
+			camera.position[0] = Math.sin(elapsedSeconds * 0.14) * lateralSpan
 			camera.position[1] = initialHeight + Math.sin(elapsedSeconds * 4.2) * 0.25
 			camera.position[2] = 8 + elapsedSeconds * walkSpeed
-			camera.yaw = Math.PI * 0.5 + Math.sin(elapsedSeconds * 0.35) * 0.04
+			camera.yaw = Math.PI * 0.5 + Math.sin(elapsedSeconds * 0.24) * 0.08
 			camera.pitch = -0.18
 		},
 		updateWorld: ({ camera }) => {
-			const nextCenterChunk = Math.floor(camera.position[2] / chunkDepth)
-			if (nextCenterChunk !== centerChunk) {
-				centerChunk = nextCenterChunk
-				const diff = ensureWindow(centerChunk)
+			const nextCenterChunkX = Math.floor(camera.position[0] / chunkWidth)
+			const nextCenterChunkZ = Math.floor(camera.position[2] / chunkDepth)
+			if (
+				nextCenterChunkX !== centerChunkX ||
+				nextCenterChunkZ !== centerChunkZ
+			) {
+				centerChunkX = nextCenterChunkX
+				centerChunkZ = nextCenterChunkZ
+				const diff = ensureWindow(centerChunkX, centerChunkZ)
 				if (diff.changed) {
 					return {
 						chunkUpdates: {

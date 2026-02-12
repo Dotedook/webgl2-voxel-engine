@@ -22,9 +22,40 @@ function computeBounds(voxels) {
 	return { minX, minY, minZ, maxX, maxY, maxZ }
 }
 
+function voxelHash(x, y, z) {
+	let h = 2166136261 >>> 0
+	h = Math.imul(h ^ (x >>> 0), 16777619) >>> 0
+	h = Math.imul(h ^ (y >>> 0), 16777619) >>> 0
+	h = Math.imul(h ^ (z >>> 0), 16777619) >>> 0
+	return h >>> 0
+}
+
+function downsampleVoxelsByHash(voxels, targetCount) {
+	if (voxels.length <= targetCount) {
+		return voxels
+	}
+	const ranked = voxels.map((voxel, index) => ({
+		index,
+		hash: voxelHash(voxel.x, voxel.y, voxel.z),
+	}))
+	ranked.sort((a, b) => a.hash - b.hash || a.index - b.index)
+	const out = new Array(targetCount)
+	for (let i = 0; i < targetCount; i += 1) {
+		out[i] = voxels[ranked[i].index]
+	}
+	return out
+}
+
 export async function loadBin3PointCloud(
 	url,
-	{ sampleTargetPoints = 140_000, voxelScale = 10, maxVoxels = 120_000 } = {},
+	{
+		sampleTargetPoints = 140_000,
+		voxelScale = 10,
+		maxVoxels = 120_000,
+		fillGaps = false,
+		fillRadius = 1,
+		fillMaxExtraVoxels = 0,
+	} = {},
 ) {
 	if (!url) {
 		throw new Error('URL .bin3 obrigatoria')
@@ -52,8 +83,23 @@ export async function loadBin3PointCloud(
 	let minX = Number.POSITIVE_INFINITY
 	let minY = Number.POSITIVE_INFINITY
 	let minZ = Number.POSITIVE_INFINITY
-	const sampled = []
+	let sampledPoints = 0
 
+	// Primeira passada: minimos para normalizacao.
+	for (let i = 0; i < pointCount; i += stride) {
+		const base = 8 + i * 10
+		const x = view.getUint16(base + 0, true)
+		const y = view.getUint16(base + 2, true)
+		const z = view.getUint16(base + 4, true)
+		minX = Math.min(minX, x)
+		minY = Math.min(minY, y)
+		minZ = Math.min(minZ, z)
+		sampledPoints += 1
+	}
+
+	// Segunda passada: voxelizacao e deduplicacao.
+	let dedupKeys = new Set()
+	let voxels = []
 	for (let i = 0; i < pointCount; i += stride) {
 		const base = 8 + i * 10
 		const x = view.getUint16(base + 0, true)
@@ -62,33 +108,73 @@ export async function loadBin3PointCloud(
 		const r = view.getUint8(base + 6)
 		const g = view.getUint8(base + 7)
 		const b = view.getUint8(base + 8)
-
-		minX = Math.min(minX, x)
-		minY = Math.min(minY, y)
-		minZ = Math.min(minZ, z)
-		sampled.push({ x, y, z, r, g, b })
-	}
-
-	const seen = new Set()
-	const voxels = []
-	for (const point of sampled) {
 		// Dataset: x,y,z. Mantemos y como altura (Y-up) para evitar modelo "deitado".
-		const vx = Math.floor((point.x - minX) / voxelScale)
-		const vy = Math.floor((point.y - minY) / voxelScale)
-		const vz = Math.floor((point.z - minZ) / voxelScale)
+		const vx = Math.floor((x - minX) / voxelScale)
+		const vy = Math.floor((y - minY) / voxelScale)
+		const vz = Math.floor((z - minZ) / voxelScale)
 		const key = vx + ',' + vy + ',' + vz
-		if (seen.has(key)) {
+		if (dedupKeys.has(key)) {
 			continue
 		}
-		seen.add(key)
+		dedupKeys.add(key)
 		voxels.push({
 			x: vx,
 			y: vy,
 			z: vz,
-			color: [point.r, point.g, point.b],
+			color: [r, g, b],
 		})
-		if (voxels.length >= maxVoxels) {
-			break
+	}
+
+	const dedupedVoxelCount = voxels.length
+	let capApplied = false
+	if (dedupedVoxelCount > maxVoxels) {
+		// Em vez de truncar por ordem do arquivo (gera "recorte"), seleciona
+		// uma amostra espacial deterministica e mais uniforme.
+		voxels = downsampleVoxelsByHash(voxels, maxVoxels)
+		capApplied = true
+		dedupKeys = new Set(voxels.map((v) => v.x + ',' + v.y + ',' + v.z))
+	}
+
+	let fillAddedVoxels = 0
+	if (fillGaps && fillMaxExtraVoxels > 0 && fillRadius > 0) {
+		const extraLimit = Math.max(0, Math.floor(fillMaxExtraVoxels))
+		const source = [...voxels]
+		const neighbors = [
+			[1, 0, 0],
+			[-1, 0, 0],
+			[0, 1, 0],
+			[0, -1, 0],
+			[0, 0, 1],
+			[0, 0, -1],
+		]
+		const radius = Math.max(1, Math.floor(fillRadius))
+
+		for (const voxel of source) {
+			if (fillAddedVoxels >= extraLimit) {
+				break
+			}
+			for (const n of neighbors) {
+				for (let step = 1; step <= radius; step += 1) {
+					if (fillAddedVoxels >= extraLimit) {
+						break
+					}
+					const vx = voxel.x + n[0] * step
+					const vy = voxel.y + n[1] * step
+					const vz = voxel.z + n[2] * step
+					const key = vx + ',' + vy + ',' + vz
+					if (dedupKeys.has(key)) {
+						continue
+					}
+					dedupKeys.add(key)
+					voxels.push({
+						x: vx,
+						y: vy,
+						z: vz,
+						color: voxel.color,
+					})
+					fillAddedVoxels += 1
+				}
+			}
 		}
 	}
 
@@ -106,12 +192,15 @@ export async function loadBin3PointCloud(
 
 	return {
 		voxels,
-		meta: {
-			declaredPoints,
-			pointCount,
-			sampledPoints: sampled.length,
-			stride,
-			voxelScale,
-		},
+			meta: {
+				declaredPoints,
+				pointCount,
+				sampledPoints,
+				stride,
+				voxelScale,
+				dedupedVoxelCount,
+				capApplied,
+				fillAddedVoxels,
+			},
+		}
 	}
-}

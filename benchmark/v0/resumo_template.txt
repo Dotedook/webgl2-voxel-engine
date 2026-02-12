@@ -1,0 +1,64 @@
+RESUMO DE BENCHMARK - <VERSAO>
+
+Identificacao
+- Versao: <v0|v1|...>
+- Data da execucao: <DD/MM/AAAA>
+- Arquivo base: <benchmark-results-XXXXXXXXXXXX.json>
+- Total de execucoes validas: <N> (<R> por cenario)
+
+Objetivo
+- <Descrever o objetivo desta rodada de benchmark.>
+
+Melhoria implementada nesta versao
+- <Descrever o que foi implementado de melhoria.>
+- Frustum culling: <sim|nao>
+- Remocao de chunks: <sim|nao>
+- Outras tecnicas ativas: <lista ou "nenhuma">
+
+Protocolo
+- Cenarios: <small, medium, large>
+- Seed: <valor>
+- Warmup: <ms>
+- Coleta: <ms>
+- Repeticoes: <valor>
+
+Ambiente de teste
+- Browser: <nome/versao>
+- Plataforma: <sistema>
+- CPU logica reportada: <valor>
+- DPR: <valor>
+- Canvas: <largura x altura>
+- Commit hash: <quantos com hash vs unknown>
+
+Resultados consolidados (media das repeticoes)
+- small:
+  - fpsAvg: <valor>
+  - fpsP50: <valor>
+  - frameMsP95: <valor>
+  - load meshGenerationMs: <valor>
+  - triangleCount (load): <valor>
+  - jsHeapAvg: <valor MB>
+- medium:
+  - fpsAvg: <valor>
+  - fpsP50: <valor>
+  - frameMsP95: <valor>
+  - load meshGenerationMs: <valor>
+  - triangleCount (load): <valor>
+  - chunkCountAvg: <valor>
+  - jsHeapAvg: <valor MB>
+- large:
+  - fpsAvg: <valor>
+  - fpsP50: <valor>
+  - frameMsP95: <valor>
+  - load meshGenerationMs: <valor>
+  - triangleCount (load): <valor>
+  - jsHeapAvg: <valor MB>
+
+Leitura tecnica
+- <Interpretacao principal 1>
+- <Interpretacao principal 2>
+- <Interpretacao principal 3>
+
+Conclusao
+- <Status do benchmark: aprovado/parcial/repetir>
+- <Proximo passo tecnico para a versao seguinte>

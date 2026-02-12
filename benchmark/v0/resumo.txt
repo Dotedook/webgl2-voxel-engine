@@ -1,0 +1,61 @@
+RESUMO DE BENCHMARK - V0
+
+Identificacao
+- Versao: v0 (baseline)
+- Data da execucao: 12/02/2026
+- Arquivo base: benchmark-results-1770855283719.json
+- Total de execucoes validas: 9 (3 por cenario)
+
+Objetivo
+- Estabelecer baseline sem tecnica nova de otimizacao para comparacoes futuras.
+
+Melhoria implementada nesta versao
+- Nenhuma melhoria de performance aplicada (baseline puro).
+
+Protocolo
+- Cenarios: small, medium, large
+- Seed: 1337
+- Warmup: 10000 ms
+- Coleta: 60000 ms
+- Repeticoes: 3 por cenario
+
+Ambiente de teste
+- Browser: Chrome 144 (WebGL 2.0)
+- Plataforma: macOS (MacIntel)
+- CPU logica reportada: 12
+- DPR: 2
+- Canvas: 3024 x 1646
+- Commit hash: 2b0da5f
+
+Resultados consolidados (media das 3 repeticoes)
+- small:
+  - fpsAvg: 120.46
+  - fpsP50: 119.53
+  - frameMsP95: 9.20
+  - load meshGenerationMs: 1.67
+  - triangleCount (load): 796
+  - jsHeapAvg: 5.69 MB
+- medium:
+  - fpsAvg: 121.08
+  - fpsP50: 120.48
+  - frameMsP95: 9.30
+  - load meshGenerationMs: 50.90
+  - triangleCount (load): 53512
+  - chunkCountAvg: 27.97
+  - jsHeapAvg: 14.86 MB
+- large:
+  - fpsAvg: 120.69
+  - fpsP50: 120.00
+  - frameMsP95: 9.33
+  - load meshGenerationMs: 481.33
+  - triangleCount (load): 1325764
+  - jsHeapAvg: 35.48 MB
+
+Leitura tecnica
+- Runtime ficou travado perto de 120 FPS (limitacao por VSync/refresh), entao fpsAvg/fpsP50 nao distinguem bem custo relativo entre cenarios.
+- O maior custo diferencial desta v0 aparece no carregamento/geracao de malha (load meshGenerationMs), principalmente no cenario large.
+- Como baseline, os resultados sao consistentes e adequados para comparacao com v1 (frustum culling).
+
+Conclusao
+- Baseline v0 aprovado como referencia.
+- Proxima comparacao esperada: v1 com frustum culling, mantendo mesmo protocolo.

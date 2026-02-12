@@ -101,7 +101,7 @@ Formato chunkado:
 
 - `scenario.chunks: Array<{ id: string, voxels: Voxel[] }>`
 - `scenario.updateWorld()` pode retornar:
-  - `{ chunkUpdates: { upserts: Chunk[], removeIds: string[] } }`
+  - `{ chunkUpdates: { upserts: Chunk[] } }`
   - ou `{ chunks: Chunk[] }` para substituicao completa
   - ou `{ voxels: Voxel[] }` (legado)
 

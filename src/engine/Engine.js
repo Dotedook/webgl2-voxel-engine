@@ -230,18 +230,12 @@ export class Engine {
 				meshGenerationMs = mesh.meshGenerationMs
 			} else if (worldUpdate && worldUpdate.chunkUpdates) {
 				const upserts = normalizeChunks(worldUpdate.chunkUpdates.upserts || [])
-				const removeIds = Array.isArray(worldUpdate.chunkUpdates.removeIds)
-					? worldUpdate.chunkUpdates.removeIds
-					: []
 				let totalMeshGenerationMs = 0
 				if (upserts.length > 0) {
 					const upsertResult = this.renderer.upsertChunks(upserts, {
 						voxelSize: this.scenarioVoxelSize,
 					})
 					totalMeshGenerationMs += upsertResult.meshGenerationMs
-				}
-				if (removeIds.length > 0) {
-					this.renderer.removeChunks(removeIds)
 				}
 				meshGenerationMs = totalMeshGenerationMs
 			}

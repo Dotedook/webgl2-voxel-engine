@@ -171,14 +171,11 @@ export function createMediumScenario(seed) {
 
 	function ensureWindow(nextCenterChunk) {
 		const upserts = []
-		const removeIds = []
-		const keep = new Set()
 		for (
 			let chunkIndex = nextCenterChunk - behindChunks;
 			chunkIndex <= nextCenterChunk + aheadChunks;
 			chunkIndex += 1
 		) {
-			keep.add(chunkIndex)
 			if (!activeChunks.has(chunkIndex)) {
 				const voxels = createStreamingChunk({
 					chunkIndex,
@@ -190,16 +187,9 @@ export function createMediumScenario(seed) {
 				upserts.push(chunkRecord(chunkIndex, voxels))
 			}
 		}
-		for (const chunkIndex of [...activeChunks.keys()]) {
-			if (!keep.has(chunkIndex)) {
-				activeChunks.delete(chunkIndex)
-				removeIds.push(toChunkId(chunkIndex))
-			}
-		}
 		return {
-			changed: upserts.length > 0 || removeIds.length > 0,
+			changed: upserts.length > 0,
 			upserts,
-			removeIds,
 		}
 	}
 
@@ -233,7 +223,6 @@ export function createMediumScenario(seed) {
 					return {
 						chunkUpdates: {
 							upserts: diff.upserts,
-							removeIds: diff.removeIds,
 						},
 					}
 				}

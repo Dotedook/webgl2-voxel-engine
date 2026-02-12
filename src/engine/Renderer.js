@@ -166,42 +166,6 @@ function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	}
 }
 
-function setFrustumPlane(out, offset, x, y, z, w) {
-	const len = Math.hypot(x, y, z) || 1
-	out[offset + 0] = x / len
-	out[offset + 1] = y / len
-	out[offset + 2] = z / len
-	out[offset + 3] = w / len
-}
-
-function extractFrustumPlanes(out, m) {
-	// left/right
-	setFrustumPlane(out, 0, m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12])
-	setFrustumPlane(out, 4, m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12])
-	// bottom/top
-	setFrustumPlane(out, 8, m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13])
-	setFrustumPlane(out, 12, m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13])
-	// near/far
-	setFrustumPlane(out, 16, m[3] + m[2], m[7] + m[6], m[11] + m[10], m[15] + m[14])
-	setFrustumPlane(out, 20, m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14])
-}
-
-function aabbVisibleInFrustum(bounds, planes) {
-	for (let i = 0; i < 24; i += 4) {
-		const nx = planes[i + 0]
-		const ny = planes[i + 1]
-		const nz = planes[i + 2]
-		const d = planes[i + 3]
-		const px = nx >= 0 ? bounds.maxX : bounds.minX
-		const py = ny >= 0 ? bounds.maxY : bounds.minY
-		const pz = nz >= 0 ? bounds.maxZ : bounds.minZ
-		if (nx * px + ny * py + nz * pz + d < 0) {
-			return false
-		}
-	}
-	return true
-}
-
 export class Renderer {
 	constructor(gl) {
 		this.gl = gl
@@ -225,7 +189,6 @@ export class Renderer {
 		this.proj = createMat4()
 		this.model = createMat4()
 		this.uViewProj = null
-		this.frustumPlanes = new Float32Array(24)
 	}
 
 	init() {
@@ -375,28 +338,6 @@ export class Renderer {
 		}
 	}
 
-	removeChunks(chunkIds) {
-		let removedCount = 0
-		for (const chunkId of chunkIds) {
-			const id = String(chunkId)
-			const existing = this.chunkMeshes.get(id)
-			if (!existing) {
-				continue
-			}
-			this.disposeMesh(existing)
-			this.chunkMeshes.delete(id)
-			removedCount += 1
-		}
-		this.recomputeTotals()
-		return {
-			removedChunkCount: removedCount,
-			chunkCount: this.chunkMeshes.size,
-			vertexCount: this.totalVertexCount,
-			triangleCount: this.totalTriangleCount,
-			voxelCount: this.totalVoxelCount,
-		}
-	}
-
 	getWorldStats() {
 		return {
 			vertexCount: this.totalVertexCount,
@@ -421,23 +362,14 @@ export class Renderer {
 		mat4Perspective(this.proj, (55 * Math.PI) / 180, aspect, 0.1, 5000.0)
 		mat4LookAt(this.view, camera.position, camera.target, camera.up)
 		mat4Multiply(this.viewProj, this.proj, this.view)
-		extractFrustumPlanes(this.frustumPlanes, this.viewProj)
 
 		gl.useProgram(this.program)
 		gl.uniformMatrix4fv(this.uViewProj, false, this.viewProj)
 
 		if (this.chunkMeshes.size > 0) {
 			let visibleChunks = 0
-			let culledChunks = 0
 			let visibleTriangles = 0
 			for (const mesh of this.chunkMeshes.values()) {
-				if (
-					mesh.bounds &&
-					!aabbVisibleInFrustum(mesh.bounds, this.frustumPlanes)
-				) {
-					culledChunks += 1
-					continue
-				}
 				visibleChunks += 1
 				if (mesh.vertexCount <= 0) {
 					continue
@@ -453,7 +385,7 @@ export class Renderer {
 			this.visibility = {
 				totalChunks: this.chunkMeshes.size,
 				visibleChunks,
-				culledChunks,
+				culledChunks: 0,
 				visibleTriangles,
 			}
 			return

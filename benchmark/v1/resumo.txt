@@ -1,0 +1,66 @@
+Baseline V1 - Voxel Engine Web
+Data: 18/02/2026
+Commit: unknown
+Ambiente: Chrome 144 / macOS / notebook pessoal
+Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
+Cenários: small, medium, large, xlarge
+
+Estado técnico desta baseline (V1):
+- Frustum culling por chunk: ativo (chunkFrustumCulling=true).
+- Objetivo: validar impacto do culling em relação à V0.
+- Exportação e instrumentação ativas em JSON + CSV com metadados de ambiente.
+
+Resultados consolidados (média das 3 repetições):
+
+small
+- fpsAvg: 120.43
+- fpsP50: 119.53
+- frameMsAvg: 8.33
+- load meshGenerationMs: 1.40
+- jsHeapAvgBytes: 2,921,451.09 (~2.79 MiB)
+- status: estável e leve (sem impacto de culling, chunkCount=0)
+
+medium (cenário pesado, alvo principal da V1)
+- fpsAvg: 120.28
+- fpsP50: 119.05
+- frameMsAvg: 9.82
+- frameMsP99: 12.90
+- frameCpuMsAvg: 1.68
+- meshGenerationMsAvg (runtime): 1.12
+- load meshGenerationMs: 9364.40 (~9.36s)
+- chunkCountAvg: 2894.52
+- visibleChunksAvg: 856.09
+- culledChunksAvg: 2038.43
+- visibleTrianglesAvg: 4.69M
+- totalTriangleCountAvg: 15.86M
+- jsHeapAvgBytes: 751,048,249.06 (~716.25 MiB)
+- status: culling funcionando e reduzindo fortemente geometria visível
+
+large
+- fpsAvg: 121.33
+- fpsP50: 120.00
+- frameMsAvg: 8.62
+- load meshGenerationMs: 423.63
+- jsHeapAvgBytes: 22,039,799.58 (~21.02 MiB)
+- status: estável (sem impacto de culling, chunkCount=0)
+
+xlarge
+- fpsAvg: 109.39
+- fpsP50: 105.65
+- frameMsAvg: 9.48
+- load meshGenerationMs: 6986.83 (~6.99s)
+- visibleTrianglesAvg: 10.08M
+- jsHeapAvgBytes: 705,083,729.64 (~672.42 MiB)
+- status: pesado; culling não atua (chunkCount=0)
+
+Comparação direta V1 vs V0 (medium):
+- fpsAvg: 62.60 -> 120.28 (+57.68, +92.1%)
+- fpsP50: 60.12 -> 119.05 (+58.93)
+- frameMsAvg: 19.43 -> 9.82 (-9.61, -49.5%)
+- visibleTrianglesAvg: 15.88M -> 4.69M (-70.5%)
+- culledChunksAvg: 0 -> 2038.43 (culling efetivamente ativo)
+
+Conclusão da baseline V1:
+- V1 validada com ganho expressivo no cenário medium, que era o gargalo da V0.
+- Critério de desempenho (P50 >= 60 FPS) foi atendido com folga em todos os cenários nesta rodada.
+- `large/xlarge` continuam sem benefício direto do culling por estarem em malha única (chunkCount=0), ponto natural para evolução futura.

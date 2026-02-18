@@ -30,10 +30,11 @@ function normalizeChunks(chunks) {
 }
 
 export class Engine {
-	constructor({ canvas }) {
+	constructor({ canvas, enableChunkFrustumCulling = true }) {
 		this.canvas = canvas
 		this.gl = null
 		this.renderer = null
+		this.enableChunkFrustumCulling = enableChunkFrustumCulling !== false
 		this.input = new InputController(canvas)
 		this.running = false
 		this.rafId = 0
@@ -68,6 +69,7 @@ export class Engine {
 			visibleChunks: 0,
 			culledChunks: 0,
 			visibleTriangles: 0,
+			chunkFrustumCullingEnabled: this.enableChunkFrustumCulling,
 			jsHeapBytes: null,
 			elapsedSeconds: 0,
 		}
@@ -81,7 +83,9 @@ export class Engine {
 			throw new Error('WebGL não disponível neste navegador')
 		}
 
-		this.renderer = new Renderer(this.gl)
+		this.renderer = new Renderer(this.gl, {
+			enableChunkFrustumCulling: this.enableChunkFrustumCulling,
+		})
 		this.renderer.init()
 		this.input.init()
 		this.resizeCanvasToDisplaySize()
@@ -103,6 +107,22 @@ export class Engine {
 
 	setCameraScript(scriptFnOrNull) {
 		this.cameraScript = scriptFnOrNull
+	}
+
+	setChunkFrustumCullingEnabled(enabled) {
+		this.enableChunkFrustumCulling = Boolean(enabled)
+		if (this.renderer) {
+			this.renderer.setChunkFrustumCullingEnabled(
+				this.enableChunkFrustumCulling,
+			)
+		}
+	}
+
+	isChunkFrustumCullingEnabled() {
+		if (this.renderer) {
+			return this.renderer.isChunkFrustumCullingEnabled()
+		}
+		return this.enableChunkFrustumCulling
 	}
 
 	resizeCanvasToDisplaySize() {
@@ -266,6 +286,7 @@ export class Engine {
 			visibleChunks: visibility.visibleChunks,
 			culledChunks: visibility.culledChunks,
 			visibleTriangles: visibility.visibleTriangles,
+			chunkFrustumCullingEnabled: this.isChunkFrustumCullingEnabled(),
 			jsHeapBytes: getHeapBytes(),
 			elapsedSeconds: this.elapsedSeconds,
 		}

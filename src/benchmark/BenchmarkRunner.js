@@ -316,6 +316,10 @@ export class BenchmarkRunner {
 	collectEnvironment() {
 		const canvas = this.engine.canvas
 		const gl = this.engine.gl
+		const chunkFrustumCulling =
+			typeof this.engine.isChunkFrustumCullingEnabled === 'function'
+				? this.engine.isChunkFrustumCullingEnabled()
+				: null
 		return {
 			timestamp: timestamp(),
 			browser: browserLabel(),
@@ -333,6 +337,7 @@ export class BenchmarkRunner {
 			canvasClientWidth: canvas ? canvas.clientWidth : null,
 			canvasClientHeight: canvas ? canvas.clientHeight : null,
 			glVersion: gl ? gl.getParameter(gl.VERSION) : 'unknown',
+			chunkFrustumCulling,
 			commitHash: readCommitHash(),
 		}
 	}
@@ -514,6 +519,7 @@ export class BenchmarkRunner {
 			dpr: item.environment?.dpr ?? '',
 			canvasWidth: item.environment?.canvasWidth ?? '',
 			canvasHeight: item.environment?.canvasHeight ?? '',
+			chunkFrustumCulling: item.environment?.chunkFrustumCulling ?? '',
 			commitHash: item.environment?.commitHash ?? '',
 		}))
 	}

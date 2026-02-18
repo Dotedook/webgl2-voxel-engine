@@ -286,8 +286,12 @@ async function main() {
 	const seed = Number(params.get('seed') || '1337')
 	const voxUrl = params.get('voxUrl') || DEFAULT_SMALL_VOX_URL
 	const bin3Url = params.get('bin3Url') || DEFAULT_CATHEDRAL_BIN3_URL
+	const cullingEnabled = params.get('culling') !== '0'
 
-	const engine = new Engine({ canvas })
+	const engine = new Engine({
+		canvas,
+		enableChunkFrustumCulling: cullingEnabled,
+	})
 	engine.init()
 
 	const scenarioLoader = createScenarioLoader({
@@ -314,7 +318,9 @@ async function main() {
 		' | tris: ' +
 		loadMetrics.triangleCount +
 		' | chunks: ' +
-		loadMetrics.chunkCount
+		loadMetrics.chunkCount +
+		' | culling: ' +
+		(cullingEnabled ? 'on' : 'off')
 
 	if (!benchmarkMode) {
 		setupMovementRecorder({ engine, scenarioId, seed, voxUrl, bin3Url })

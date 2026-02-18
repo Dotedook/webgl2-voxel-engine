@@ -124,6 +124,76 @@ function computeBoundsFromVoxels(voxels, voxelSize) {
 	return { minX, minY, minZ, maxX, maxY, maxZ }
 }
 
+function normalizePlane(planes, offset) {
+	const a = planes[offset + 0]
+	const b = planes[offset + 1]
+	const c = planes[offset + 2]
+	const d = planes[offset + 3]
+	const invLen = 1 / (Math.hypot(a, b, c) || 1)
+	planes[offset + 0] = a * invLen
+	planes[offset + 1] = b * invLen
+	planes[offset + 2] = c * invLen
+	planes[offset + 3] = d * invLen
+}
+
+function extractFrustumPlanes(out, m) {
+	// Matriz em formato column-major.
+	// rows: r0=[m0,m4,m8,m12], r1=[m1,m5,m9,m13], r2=[m2,m6,m10,m14], r3=[m3,m7,m11,m15]
+	// left = r3 + r0
+	out[0] = m[3] + m[0]
+	out[1] = m[7] + m[4]
+	out[2] = m[11] + m[8]
+	out[3] = m[15] + m[12]
+	// right = r3 - r0
+	out[4] = m[3] - m[0]
+	out[5] = m[7] - m[4]
+	out[6] = m[11] - m[8]
+	out[7] = m[15] - m[12]
+	// bottom = r3 + r1
+	out[8] = m[3] + m[1]
+	out[9] = m[7] + m[5]
+	out[10] = m[11] + m[9]
+	out[11] = m[15] + m[13]
+	// top = r3 - r1
+	out[12] = m[3] - m[1]
+	out[13] = m[7] - m[5]
+	out[14] = m[11] - m[9]
+	out[15] = m[15] - m[13]
+	// near = r3 + r2
+	out[16] = m[3] + m[2]
+	out[17] = m[7] + m[6]
+	out[18] = m[11] + m[10]
+	out[19] = m[15] + m[14]
+	// far = r3 - r2
+	out[20] = m[3] - m[2]
+	out[21] = m[7] - m[6]
+	out[22] = m[11] - m[10]
+	out[23] = m[15] - m[14]
+
+	for (let i = 0; i < 24; i += 4) {
+		normalizePlane(out, i)
+	}
+}
+
+function aabbIntersectsFrustum(bounds, planes) {
+	if (!bounds) {
+		return true
+	}
+	for (let i = 0; i < 24; i += 4) {
+		const nx = planes[i + 0]
+		const ny = planes[i + 1]
+		const nz = planes[i + 2]
+		const d = planes[i + 3]
+		const px = nx >= 0 ? bounds.maxX : bounds.minX
+		const py = ny >= 0 ? bounds.maxY : bounds.minY
+		const pz = nz >= 0 ? bounds.maxZ : bounds.minZ
+		if (nx * px + ny * py + nz * pz + d < 0) {
+			return false
+		}
+	}
+	return true
+}
+
 function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	const scale = Math.max(0.2, voxelSize)
 	const offset = (1 - scale) * 0.5
@@ -199,11 +269,12 @@ function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 }
 
 export class Renderer {
-	constructor(gl) {
+	constructor(gl, { enableChunkFrustumCulling = true } = {}) {
 		this.gl = gl
 		this.program = null
 		this.singleMesh = null
 		this.chunkMeshes = new Map()
+		this.chunkFrustumCullingEnabled = enableChunkFrustumCulling !== false
 		this.totalVertexCount = 0
 		this.totalTriangleCount = 0
 		this.totalVoxelCount = 0
@@ -220,6 +291,7 @@ export class Renderer {
 		this.view = createMat4()
 		this.proj = createMat4()
 		this.model = createMat4()
+		this.frustumPlanes = new Float32Array(24)
 		this.uViewProj = null
 	}
 
@@ -379,6 +451,14 @@ export class Renderer {
 		}
 	}
 
+	setChunkFrustumCullingEnabled(enabled) {
+		this.chunkFrustumCullingEnabled = Boolean(enabled)
+	}
+
+	isChunkFrustumCullingEnabled() {
+		return this.chunkFrustumCullingEnabled
+	}
+
 	resize(width, height) {
 		this.gl.viewport(0, 0, width, height)
 	}
@@ -399,17 +479,28 @@ export class Renderer {
 		gl.uniformMatrix4fv(this.uViewProj, false, this.viewProj)
 
 		if (this.chunkMeshes.size > 0) {
+			if (this.chunkFrustumCullingEnabled) {
+				extractFrustumPlanes(this.frustumPlanes, this.viewProj)
+			}
 			let visibleChunks = 0
+			let culledChunks = 0
 			let visibleTriangles = 0
 			for (const mesh of this.chunkMeshes.values()) {
+				if (
+					this.chunkFrustumCullingEnabled &&
+					!aabbIntersectsFrustum(mesh.bounds, this.frustumPlanes)
+				) {
+					culledChunks += 1
+					continue
+				}
 				visibleChunks += 1
+				visibleTriangles += mesh.triangleCount
 				if (mesh.vertexCount <= 0) {
 					continue
 				}
 				gl.bindVertexArray(mesh.vao)
 				gl.drawArrays(gl.TRIANGLES, 0, mesh.vertexCount)
 				this.drawCalls += 1
-				visibleTriangles += mesh.triangleCount
 			}
 			gl.bindVertexArray(null)
 			this.vertexCount = this.totalVertexCount
@@ -417,7 +508,7 @@ export class Renderer {
 			this.visibility = {
 				totalChunks: this.chunkMeshes.size,
 				visibleChunks,
-				culledChunks: 0,
+				culledChunks,
 				visibleTriangles,
 			}
 			return

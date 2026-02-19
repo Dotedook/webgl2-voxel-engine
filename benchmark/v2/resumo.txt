@@ -1,6 +1,6 @@
 Baseline V2 - Voxel Engine Web
 Data: 19/02/2026
-Commit: unknown
+Commit: 02665b4498a786ffa95529a595901a797f52978b
 Ambiente: Chrome 144 / macOS / notebook pessoal
 Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
 Cenarios: small, medium, large, xlarge

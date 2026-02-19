@@ -194,6 +194,46 @@ function aabbIntersectsFrustum(bounds, planes) {
 	return true
 }
 
+function toColorByte(value) {
+	if (!Number.isFinite(value)) {
+		return 0
+	}
+	if (value <= 1) {
+		return Math.max(0, Math.min(255, Math.round(value * 255)))
+	}
+	return Math.max(0, Math.min(255, Math.round(value)))
+}
+
+function fnv1aMix(hash, value) {
+	let h = hash ^ (value & 0xff)
+	h = Math.imul(h, 16777619)
+	h = h >>> 0
+	h ^= (value >>> 8) & 0xff
+	h = Math.imul(h, 16777619) >>> 0
+	h ^= (value >>> 16) & 0xff
+	h = Math.imul(h, 16777619) >>> 0
+	return h
+}
+
+function computeChunkSignature(voxels) {
+	const count = Array.isArray(voxels) ? voxels.length : 0
+	if (count === 0) {
+		return '0:0'
+	}
+	let hash = 2166136261
+	for (let i = 0; i < voxels.length; i += 1) {
+		const voxel = voxels[i]
+		hash = fnv1aMix(hash, (Number(voxel.x) | 0) >>> 0)
+		hash = fnv1aMix(hash, (Number(voxel.y) | 0) >>> 0)
+		hash = fnv1aMix(hash, (Number(voxel.z) | 0) >>> 0)
+		const color = Array.isArray(voxel.color) ? voxel.color : [0, 0, 0]
+		hash = fnv1aMix(hash, toColorByte(color[0]))
+		hash = fnv1aMix(hash, toColorByte(color[1]))
+		hash = fnv1aMix(hash, toColorByte(color[2]))
+	}
+	return String(count) + ':' + hash.toString(16)
+}
+
 function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	const scale = Math.max(0.2, voxelSize)
 	const offset = (1 - scale) * 0.5
@@ -356,6 +396,22 @@ export class Renderer {
 		this.chunkMeshes.clear()
 	}
 
+	shouldRebuildChunk(existingMesh, chunk, signature, { forceDirty = false } = {}) {
+		if (!existingMesh) {
+			return true
+		}
+		if (chunk && chunk.dirty === false) {
+			return false
+		}
+		if (chunk && chunk.dirty === true) {
+			return true
+		}
+		if (forceDirty) {
+			return true
+		}
+		return existingMesh.signature !== signature
+	}
+
 	recomputeTotals() {
 		let vertices = 0
 		let triangles = 0
@@ -397,18 +453,45 @@ export class Renderer {
 			this.disposeMesh(this.singleMesh)
 			this.singleMesh = null
 		}
-		this.disposeAllChunkMeshes()
 		let meshGenerationMs = 0
+		let builtChunkCount = 0
+		let reusedChunkCount = 0
+		let removedChunkCount = 0
+		const nextIds = new Set()
 		for (const chunk of chunks) {
 			const id = String(chunk.id)
 			const voxels = Array.isArray(chunk.voxels) ? chunk.voxels : []
-			const mesh = this.createMeshFromVoxels(voxels, voxelSize)
-			meshGenerationMs += mesh.meshGenerationMs
-			this.chunkMeshes.set(id, mesh)
+			nextIds.add(id)
+			const signature = computeChunkSignature(voxels)
+			const existing = this.chunkMeshes.get(id)
+			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature)
+			if (shouldRebuild) {
+				if (existing) {
+					this.disposeMesh(existing)
+				}
+				const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+				meshGenerationMs += mesh.meshGenerationMs
+				mesh.signature = signature
+				this.chunkMeshes.set(id, mesh)
+				builtChunkCount += 1
+			} else {
+				reusedChunkCount += 1
+			}
+		}
+		for (const [id, mesh] of this.chunkMeshes.entries()) {
+			if (nextIds.has(id)) {
+				continue
+			}
+			this.disposeMesh(mesh)
+			this.chunkMeshes.delete(id)
+			removedChunkCount += 1
 		}
 		this.recomputeTotals()
 		return {
 			meshGenerationMs,
+			builtChunkCount,
+			reusedChunkCount,
+			removedChunkCount,
 			vertexCount: this.totalVertexCount,
 			triangleCount: this.totalTriangleCount,
 			voxelCount: this.totalVoxelCount,
@@ -418,23 +501,34 @@ export class Renderer {
 
 	upsertChunks(chunks, { voxelSize = 1 } = {}) {
 		let meshGenerationMs = 0
-		let updatedCount = 0
+		let builtChunkCount = 0
+		let reusedChunkCount = 0
 		for (const chunk of chunks) {
 			const id = String(chunk.id)
 			const voxels = Array.isArray(chunk.voxels) ? chunk.voxels : []
+			const signature = computeChunkSignature(voxels)
 			const existing = this.chunkMeshes.get(id)
-			if (existing) {
-				this.disposeMesh(existing)
+			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature, {
+				forceDirty: true,
+			})
+			if (shouldRebuild) {
+				if (existing) {
+					this.disposeMesh(existing)
+				}
+				const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+				meshGenerationMs += mesh.meshGenerationMs
+				mesh.signature = signature
+				this.chunkMeshes.set(id, mesh)
+				builtChunkCount += 1
+			} else {
+				reusedChunkCount += 1
 			}
-			const mesh = this.createMeshFromVoxels(voxels, voxelSize)
-			meshGenerationMs += mesh.meshGenerationMs
-			this.chunkMeshes.set(id, mesh)
-			updatedCount += 1
 		}
 		this.recomputeTotals()
 		return {
 			meshGenerationMs,
-			updatedChunkCount: updatedCount,
+			builtChunkCount,
+			reusedChunkCount,
 			chunkCount: this.chunkMeshes.size,
 			vertexCount: this.totalVertexCount,
 			triangleCount: this.totalTriangleCount,

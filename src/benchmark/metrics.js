@@ -26,6 +26,9 @@ export function summarizeFrameSamples(samples) {
 	const frameCpuMs = samples.map((s) => s.frameCpuMs ?? s.frameMs)
 	const updateMs = samples.map((s) => s.updateMs)
 	const meshGenerationMs = samples.map((s) => s.meshGenerationMs || 0)
+	const chunkMeshBuildCount = samples.map((s) => s.chunkMeshBuildCount || 0)
+	const chunkMeshReuseCount = samples.map((s) => s.chunkMeshReuseCount || 0)
+	const chunkMeshRemovedCount = samples.map((s) => s.chunkMeshRemovedCount || 0)
 	const chunkCount = samples.map((s) => s.chunkCount || 0)
 	const visibleChunks = samples.map((s) => s.visibleChunks || 0)
 	const culledChunks = samples.map((s) => s.culledChunks || 0)
@@ -50,6 +53,12 @@ export function summarizeFrameSamples(samples) {
 		updateMsP95: percentile(updateMs, 95),
 		meshGenerationMsAvg: average(meshGenerationMs),
 		meshGenerationMsP95: percentile(meshGenerationMs, 95),
+		chunkMeshBuildCountAvg: average(chunkMeshBuildCount),
+		chunkMeshBuildCountP95: percentile(chunkMeshBuildCount, 95),
+		chunkMeshReuseCountAvg: average(chunkMeshReuseCount),
+		chunkMeshReuseCountP95: percentile(chunkMeshReuseCount, 95),
+		chunkMeshRemovedCountAvg: average(chunkMeshRemovedCount),
+		chunkMeshRemovedCountP95: percentile(chunkMeshRemovedCount, 95),
 		chunkCountAvg: average(chunkCount),
 		visibleChunksAvg: average(visibleChunks),
 		culledChunksAvg: average(culledChunks),

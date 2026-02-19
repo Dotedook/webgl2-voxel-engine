@@ -220,6 +220,12 @@ export class BenchmarkRunner {
 			summary.updateMsAvg.toFixed(3) +
 			' | mesh rebuild ms: ' +
 			summary.meshGenerationMsAvg.toFixed(3) +
+			' | chunk build/reuse/rm: ' +
+			summary.chunkMeshBuildCountAvg.toFixed(2) +
+			'/' +
+			summary.chunkMeshReuseCountAvg.toFixed(2) +
+			'/' +
+			summary.chunkMeshRemovedCountAvg.toFixed(2) +
 			'\nchunks visíveis: ' +
 			latest.visibleChunks +
 			'/' +
@@ -504,6 +510,12 @@ export class BenchmarkRunner {
 			frameCpuMsAvg: item.summary?.frameCpuMsAvg ?? '',
 			updateMsAvg: item.summary?.updateMsAvg ?? '',
 			meshGenerationMsAvg: item.summary?.meshGenerationMsAvg ?? '',
+			chunkMeshBuildCountAvg: item.summary?.chunkMeshBuildCountAvg ?? '',
+			chunkMeshBuildCountP95: item.summary?.chunkMeshBuildCountP95 ?? '',
+			chunkMeshReuseCountAvg: item.summary?.chunkMeshReuseCountAvg ?? '',
+			chunkMeshReuseCountP95: item.summary?.chunkMeshReuseCountP95 ?? '',
+			chunkMeshRemovedCountAvg: item.summary?.chunkMeshRemovedCountAvg ?? '',
+			chunkMeshRemovedCountP95: item.summary?.chunkMeshRemovedCountP95 ?? '',
 			chunkCountAvg: item.summary?.chunkCountAvg ?? '',
 			visibleChunksAvg: item.summary?.visibleChunksAvg ?? '',
 			culledChunksAvg: item.summary?.culledChunksAvg ?? '',
@@ -511,6 +523,9 @@ export class BenchmarkRunner {
 			totalTriangleCountAvg: item.summary?.totalTriangleCountAvg ?? '',
 			jsHeapAvgBytes: item.summary?.jsHeapAvgBytes ?? '',
 			loadMeshGenerationMs: item.loadMetrics?.meshGenerationMs ?? '',
+			loadChunkMeshBuildCount: item.loadMetrics?.chunkMeshBuildCount ?? '',
+			loadChunkMeshReuseCount: item.loadMetrics?.chunkMeshReuseCount ?? '',
+			loadChunkMeshRemovedCount: item.loadMetrics?.chunkMeshRemovedCount ?? '',
 			loadTriangleCount: item.loadMetrics?.triangleCount ?? '',
 			loadVoxelCount: item.loadMetrics?.voxelCount ?? '',
 			loadChunkCount: item.loadMetrics?.chunkCount ?? '',

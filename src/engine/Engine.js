@@ -61,6 +61,9 @@ export class Engine {
 			frameCpuMs: 0,
 			updateMs: 0,
 			meshGenerationMs: 0,
+			chunkMeshBuildCount: 0,
+			chunkMeshReuseCount: 0,
+			chunkMeshRemovedCount: 0,
 			drawCalls: 0,
 			triangleCount: 0,
 			totalTriangleCount: 0,
@@ -172,6 +175,9 @@ export class Engine {
 		const worldStats = this.renderer.getWorldStats()
 		return {
 			meshGenerationMs: mesh.meshGenerationMs,
+			chunkMeshBuildCount: mesh.builtChunkCount || 0,
+			chunkMeshReuseCount: mesh.reusedChunkCount || 0,
+			chunkMeshRemovedCount: mesh.removedChunkCount || 0,
 			vertexCount: worldStats.vertexCount,
 			triangleCount: worldStats.triangleCount,
 			voxelCount: worldStats.voxelCount,
@@ -226,6 +232,9 @@ export class Engine {
 
 		const updateStart = performance.now()
 		let meshGenerationMs = 0
+		let chunkMeshBuildCount = 0
+		let chunkMeshReuseCount = 0
+		let chunkMeshRemovedCount = 0
 		if (this.cameraScript) {
 			this.cameraScript(this.camera, this.elapsedSeconds, dtSeconds)
 		} else {
@@ -252,6 +261,9 @@ export class Engine {
 					voxelSize: this.scenarioVoxelSize,
 				})
 				meshGenerationMs = mesh.meshGenerationMs
+				chunkMeshBuildCount += mesh.builtChunkCount || 0
+				chunkMeshReuseCount += mesh.reusedChunkCount || 0
+				chunkMeshRemovedCount += mesh.removedChunkCount || 0
 			} else if (worldUpdate && worldUpdate.chunkUpdates) {
 				const upserts = normalizeChunks(worldUpdate.chunkUpdates.upserts || [])
 				let totalMeshGenerationMs = 0
@@ -260,6 +272,8 @@ export class Engine {
 						voxelSize: this.scenarioVoxelSize,
 					})
 					totalMeshGenerationMs += upsertResult.meshGenerationMs
+					chunkMeshBuildCount += upsertResult.builtChunkCount || 0
+					chunkMeshReuseCount += upsertResult.reusedChunkCount || 0
 				}
 				meshGenerationMs = totalMeshGenerationMs
 			}
@@ -278,6 +292,9 @@ export class Engine {
 			frameCpuMs,
 			updateMs,
 			meshGenerationMs,
+			chunkMeshBuildCount,
+			chunkMeshReuseCount,
+			chunkMeshRemovedCount,
 			drawCalls: this.renderer.drawCalls,
 			triangleCount: this.renderer.triangleCount,
 			totalTriangleCount: worldStats.triangleCount,

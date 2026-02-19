@@ -508,9 +508,7 @@ export class Renderer {
 			const voxels = Array.isArray(chunk.voxels) ? chunk.voxels : []
 			const signature = computeChunkSignature(voxels)
 			const existing = this.chunkMeshes.get(id)
-			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature, {
-				forceDirty: true,
-			})
+			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature)
 			if (shouldRebuild) {
 				if (existing) {
 					this.disposeMesh(existing)

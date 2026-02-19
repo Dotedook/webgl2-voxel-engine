@@ -1,6 +1,6 @@
 Baseline V2 - Voxel Engine Web
 Data: 19/02/2026
-Commit: 02665b4498a786ffa95529a595901a797f52978b
+Commit: unknown
 Ambiente: Chrome 144 / macOS / notebook pessoal
 Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
 Cenarios: small, medium, large, xlarge
@@ -8,64 +8,65 @@ Cenarios: small, medium, large, xlarge
 Estado tecnico desta baseline (V2):
 - Frustum culling por chunk: ativo (chunkFrustumCulling=true).
 - Meshing por chunk com cache por assinatura + dirty flag: ativo.
-- Objetivo: validar impacto de cache/reuso de mesh e consolidar a V2 como referencia apos V1.
+- Integracao do fluxo dirty/cache corrigida antes desta rodada final da V2.
 - Exportacao e instrumentacao ativas em JSON + CSV com metadados de ambiente.
 
 Resultados consolidados (media das 3 repeticoes):
 
 small
-- fpsAvg: 120.65
+- fpsAvg: 120.51
 - fpsP50: 119.05
-- frameMsAvg: 8.34
-- load meshGenerationMs: 1.37
-- jsHeapAvgBytes: 115,549,982.94 (~110.20 MiB)
-- status: estavel e leve em CPU/GPU; memoria oscilou acima da V1
+- frameMsAvg: 8.33
+- load meshGenerationMs: 1.07
+- jsHeapAvgBytes: 35,842,629.74 (~34.18 MiB)
+- status: estavel e leve
 
 medium (cenario pesado, alvo principal)
-- fpsAvg: 121.32
-- fpsP50: 119.53
-- frameMsAvg: 9.65
-- frameMsP99: 11.80
-- frameCpuMsAvg: 1.83
-- meshGenerationMsAvg (runtime): 1.20
-- load meshGenerationMs: 3015.77 (~3.02s media; rep1=9.05s, rep2/rep3=0 por reuso)
-- chunkCountAvg: 2907.92
-- visibleChunksAvg: 843.72
-- culledChunksAvg: 2064.20
-- visibleTrianglesAvg: 4.62M
-- totalTriangleCountAvg: 15.93M
+- fpsAvg: 121.27
+- fpsP50: 119.05
+- frameMsAvg: 9.56
+- frameMsP99: 12.30
+- frameCpuMsAvg: 1.71
+- meshGenerationMsAvg (runtime): 1.05
+- load meshGenerationMs: 3159.20 (~3.16s media)
+- load detalhe: rep1 build=1221 chunks (9477.6ms); rep2/rep3 reuse=1221 chunks (0ms)
+- chunkCountAvg: 2909.10
+- visibleChunksAvg: 844.00
+- culledChunksAvg: 2065.10
+- visibleTrianglesAvg: 4.63M
+- totalTriangleCountAvg: 15.94M
 - chunkMeshBuildCountAvg (runtime): 0.13
 - chunkMeshReuseCountAvg (runtime): 0.00
 - chunkMeshRemovedCountAvg (runtime): 0.00
-- jsHeapAvgBytes: 1,540,341,199.30 (~1468.98 MiB)
-- status: desempenho de frame muito bom, mas com pressao de memoria alta
+- jsHeapAvgBytes: 733,203,329.90 (~699.24 MiB)
+- status: desempenho de frame muito bom, com pressao de memoria ainda relevante
 
 large
-- fpsAvg: 120.88
+- fpsAvg: 121.46
 - fpsP50: 119.53
 - frameMsAvg: 8.33
-- load meshGenerationMs: 465.73
-- jsHeapAvgBytes: 38,002,894.74 (~36.24 MiB)
+- load meshGenerationMs: 434.20
+- jsHeapAvgBytes: 39,006,158.16 (~37.20 MiB)
 - status: estavel (sem impacto direto de culling/cache por chunk; chunkCount=0)
 
 xlarge
-- fpsAvg: 112.58
-- fpsP50: 110.70
-- frameMsAvg: 9.17
-- frameMsP99: 11.70
-- load meshGenerationMs: 6808.93 (~6.81s)
+- fpsAvg: 114.70
+- fpsP50: 112.36
+- frameMsAvg: 9.09
+- frameMsP99: 11.60
+- load meshGenerationMs: 6720.70 (~6.72s)
 - visibleTrianglesAvg: 10.08M
-- jsHeapAvgBytes: 764,582,099.38 (~729.16 MiB)
+- jsHeapAvgBytes: 770,088,104.87 (~734.41 MiB)
 - status: pesado em carregamento inicial, runtime estavel
 
 Comparacao direta V2 vs V1 (medium):
-- fpsAvg: 120.28 -> 121.32 (+1.04, +0.9%)
-- frameMsAvg: 9.82 -> 9.65 (-0.17, -1.8%)
-- visibleTrianglesAvg: 4.69M -> 4.62M (-1.4%)
-- jsHeapAvgBytes: 751,048,249.06 -> 1,540,341,199.30 (+105.1%)
-- load meshGenerationMs: 9364.40 -> 3015.77 (-67.8% na media, com forte efeito de reuso entre repeticoes)
+- fpsAvg: 120.28 -> 121.27 (+0.99, +0.8%)
+- frameMsAvg: 9.82 -> 9.56 (-0.26, -2.7%)
+- visibleTrianglesAvg: 4.69M -> 4.63M (-1.4%)
+- jsHeapAvgBytes: 751,048,249.06 -> 733,203,329.90 (-2.4%)
+- load meshGenerationMs: 9364.40 -> 3159.20 (-66.3% na media)
 
 Conclusao da baseline V2:
-- V2 validada em desempenho de render, mantendo o ganho da V1 no cenario medium.
-- O cache de meshing mostrou efeito claro no carregamento entre repeticoes (rep2/rep3 com meshGenerationMs=0 no medium).
-- Principal gargalo atual para V3: memoria (especialmente medium), antes de escalar streaming/cenarios maiores.
+- V2 validada com desempenho consistente e alto no cenario medium.
+- O cache de meshing mostrou efeito claro no carregamento entre repeticoes.
+- Principal frente para V3: aumentar reuso em runtime no medium e reduzir memoria em cenarios pesados.

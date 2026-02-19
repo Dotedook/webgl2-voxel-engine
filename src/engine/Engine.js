@@ -16,17 +16,23 @@ function normalizeChunks(chunks) {
 	if (!Array.isArray(chunks)) {
 		return []
 	}
-	return chunks.map((chunk, index) => ({
-		id: String(
-			chunk && (chunk.id ?? chunk.chunkId ?? chunk.key ?? 'chunk-' + index),
-		),
-		voxels:
-			chunk && Array.isArray(chunk.voxels)
-				? chunk.voxels
-				: Array.isArray(chunk)
-					? chunk
-					: [],
-	}))
+	return chunks.map((chunk, index) => {
+		const normalized = {
+			id: String(
+				chunk && (chunk.id ?? chunk.chunkId ?? chunk.key ?? 'chunk-' + index),
+			),
+			voxels:
+				chunk && Array.isArray(chunk.voxels)
+					? chunk.voxels
+					: Array.isArray(chunk)
+						? chunk
+						: [],
+		}
+		if (chunk && typeof chunk.dirty === 'boolean') {
+			normalized.dirty = chunk.dirty
+		}
+		return normalized
+	})
 }
 
 export class Engine {

@@ -6,7 +6,7 @@ Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
 Cenarios: small, medium, large, xlarge
 
 Estado tecnico desta baseline (pre-V0):
-- Sem hidden face removal (o "face culling" entre voxels).
+- Sem otimizações.
 - Cada voxel gera as 6 faces, inclusive internas.
 - Objetivo: medir o custo bruto antes da introducao do hidden face removal da V0.
 
@@ -56,11 +56,6 @@ xlarge
 - jsHeapAvgBytes: 74,253,745.18 (~70.81 MiB)
 - status: utilizavel, mas ja com perda clara de throughput
 
-Comparacao direta com a V0 (com hidden face removal):
-- small: V0 reduz triangulos de 4,512 para 796 (~82.4% a menos) e cai memoria media em ~118.72 MiB; FPS fica praticamente igual.
-- medium: V0 sobe de 28.95 para 62.60 FPS (+33.65 FPS), derruba frameMsAvg de 98.91 para 19.43 e reduz triangulos de 135.80M para 15.88M (~88.3% a menos); o custo de load sobe de 1.98s para 10.47s.
-- large: V0 reduz triangulos de 1.41M para 1.33M (~5.9% a menos), com diferenca pratica minima em FPS; o load sobe de 101.57ms para 468.37ms.
-- xlarge: V0 sobe de 91.34 para 116.81 FPS (+25.47 FPS), reduz frameMsAvg de 11.06 para 8.88 e corta triangulos de 13.44M para 10.08M (~25.0% a menos); o load sobe de 1.11s para 11.87s.
 
 Conclusao da baseline pre-V0:
 - Esta baseline valida o custo bruto de manter todas as faces internas.

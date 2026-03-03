@@ -6,8 +6,8 @@ Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
 Cenários: small, medium, large, xlarge
 
 Estado técnico desta baseline (V0):
-- Sem otimizações.
-- Objetivo: estabelecer referência antes das otimizações de culling/streaming da V1.
+- Com hidden face removal (o "face culling" entre voxels).
+- Objetivo: estabelecer a primeira baseline otimizada de geometria, antes das otimizações de culling/streaming da V1.
 - Exportação e instrumentação ativas em JSON + CSV com metadados de ambiente.
 
 Resultados consolidados (média das 3 repetições):
@@ -48,7 +48,14 @@ xlarge
 - jsHeapAvgBytes: 354,097,849.32 (~337.69 MiB)
 - status: pesado no carregamento inicial, estável durante render contínua
 
+Comparação direta com a baseline pre-V0 (sem hidden face removal):
+- small: V0 mantém FPS praticamente igual (120.50 vs 120.72), mas reduz triângulos de 4,512 para 796 (~82.4% a menos) e cai memória média em ~118.72 MiB; o load sobe de 0.73ms para 1.27ms.
+- medium: V0 sobe de 28.95 para 62.60 FPS (+33.65 FPS), derruba frameMsAvg de 98.91 para 19.43 e reduz triângulos de 135.80M para 15.88M (~88.3% a menos); o custo de load sobe de 1.98s para 10.47s.
+- large: V0 reduz triângulos de 1.41M para 1.33M (~5.9% a menos), com diferença prática mínima em FPS; o load sobe de 101.57ms para 468.37ms.
+- xlarge: V0 sobe de 91.34 para 116.81 FPS (+25.47 FPS), reduz frameMsAvg de 11.06 para 8.88 e corta triângulos de 13.44M para 10.08M (~25.0% a menos); o load sobe de 1.11s para 11.87s.
+
 Conclusão da baseline V0:
 - A baseline ficou válida e reproduzível.
-- Gargalo principal para evolução de performance está no cenário medium (picos de frame time, custo de atualização/mesh e maior pressão de memória).
-- Esta V0 será a referência oficial para comparação com a V1 (frustum culling + refinamentos de streaming/render).
+- O hidden face removal se provou a primeira otimização estrutural da engine: ele troca custo de mesh no carregamento por uma redução massiva de geometria em runtime.
+- Mesmo com isso, o gargalo principal para evolução continua no cenário medium (picos de frame time, custo de atualização/mesh e maior pressão de memória).
+- Esta V0 passa a ser a referência oficial "com face culling" para comparação com a V1 (frustum culling + refinamentos de streaming/render).

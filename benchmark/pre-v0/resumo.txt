@@ -1,0 +1,63 @@
+Baseline pre-V0 - Voxel Engine Web
+Data: 03/03/2026
+Commit: unknown
+Ambiente: Chrome 145 / macOS / notebook pessoal
+Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
+Cenarios: small, medium, large, xlarge
+
+Estado tecnico desta baseline (pre-V0):
+- Sem otimizações.
+- Cada voxel gera as 6 faces, inclusive internas.
+- Objetivo: medir o custo bruto antes da introducao do hidden face removal da V0.
+
+Resultados consolidados (media das 3 repeticoes):
+
+small
+- fpsAvg: 120.72
+- fpsP50: 120.48
+- frameMsAvg: 8.33
+- load meshGenerationMs: 0.73
+- visibleTrianglesAvg: 4,512
+- jsHeapAvgBytes: 129,959,962.77 (~123.94 MiB)
+- status: estavel, mas com geometria e memoria desnecessariamente altas
+
+medium (cenario critico)
+- fpsAvg: 28.95
+- fpsP50: 11.48
+- frameMsAvg: 98.91
+- frameMsP95: 171.03
+- frameMsP99: 397.43
+- frameCpuMsAvg: 14.87
+- updateMsAvg: 14.34
+- load meshGenerationMs: 1979.33 (~1.98s)
+- chunkCountAvg: 2926.82
+- visibleTrianglesAvg: 135.80M
+- totalTriangleCountAvg: 135.80M
+- jsHeapAvgBytes: 531,073,688.96 (~506.47 MiB)
+- status: inviavel para runtime continuo; a geometria explode sem remover faces internas
+
+large
+- fpsAvg: 121.18
+- fpsP50: 119.53
+- frameMsAvg: 8.33
+- load meshGenerationMs: 101.57
+- visibleTrianglesAvg: 1.41M
+- jsHeapAvgBytes: 13,258,846.66 (~12.64 MiB)
+- status: estavel
+
+xlarge
+- fpsAvg: 91.34
+- fpsP50: 90.65
+- frameMsAvg: 11.06
+- frameMsP95: 12.83
+- frameMsP99: 13.50
+- load meshGenerationMs: 1111.83 (~1.11s)
+- visibleTrianglesAvg: 13.44M
+- jsHeapAvgBytes: 74,253,745.18 (~70.81 MiB)
+- status: utilizavel, mas ja com perda clara de throughput
+
+
+Conclusao da baseline pre-V0:
+- Esta baseline valida o custo bruto de manter todas as faces internas.
+- O ganho de runtime da V0 vem diretamente do hidden face removal.
+- O hidden face removal nao e refinamento marginal: ele e a primeira otimizacao estrutural da engine.

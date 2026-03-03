@@ -127,29 +127,9 @@ function computeBoundsFromVoxels(voxels, voxelSize) {
 function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	const scale = Math.max(0.2, voxelSize)
 	const offset = (1 - scale) * 0.5
-	const occupancy = new Set()
+	const exposedFaceCount = voxels.length * CUBE_FACES.length
 
-	for (const voxel of voxels) {
-		occupancy.add(voxelKey(voxel.x, voxel.y, voxel.z))
-	}
-
-	let exposedFaceCount = 0
-	for (const voxel of voxels) {
-		for (let face = 0; face < CUBE_FACES.length; face += 1) {
-			const dir = FACE_NEIGHBORS[face]
-			const neighborKey = voxelKey(
-				voxel.x + dir[0],
-				voxel.y + dir[1],
-				voxel.z + dir[2],
-			)
-			if (occupancy.has(neighborKey)) {
-				continue
-			}
-			exposedFaceCount += 1
-		}
-	}
-
-	// Cada face exposta gera 6 vertices; cada vertice tem 6 floats (posicao + cor).
+	// Cada face gera 6 vertices; cada vertice tem 6 floats (posicao + cor).
 	const floatsPerFace = 36
 	const totalFloats = exposedFaceCount * floatsPerFace
 	// Evita alocacoes impraticaveis e erro obscuro de "Invalid array length".
@@ -168,15 +148,6 @@ function buildExposedVoxelVertices(voxels, voxelSize = 1) {
 	for (const voxel of voxels) {
 		const [cr, cg, cb] = normalizeColor(voxel.color)
 		for (let face = 0; face < CUBE_FACES.length; face += 1) {
-			const dir = FACE_NEIGHBORS[face]
-			const neighborKey = voxelKey(
-				voxel.x + dir[0],
-				voxel.y + dir[1],
-				voxel.z + dir[2],
-			)
-			if (occupancy.has(neighborKey)) {
-				continue
-			}
 			const corners = CUBE_FACES[face]
 			for (let tri = 0; tri < FACE_TRIANGLE_ORDER.length; tri += 1) {
 				const cornerIndex = FACE_TRIANGLE_ORDER[tri] * 3

@@ -182,11 +182,13 @@ export function createMediumScenario(seed) {
 	const lateralSpan = chunkWidth * 2.6
 	let centerChunkX = 0
 	let centerChunkZ = 0
-	const activeChunks = new Map()
+	const activeChunks = new Set()
 	const initialHeight = 15
 
 	function ensureWindow(nextCenterChunkX, nextCenterChunkZ) {
 		const upserts = []
+		const keepIds = new Set()
+		const removes = []
 		for (
 			let chunkZ = nextCenterChunkZ - behindChunks;
 			chunkZ <= nextCenterChunkZ + aheadChunks;
@@ -198,6 +200,7 @@ export function createMediumScenario(seed) {
 				chunkX += 1
 			) {
 				const chunkId = toChunkId(chunkX, chunkZ)
+				keepIds.add(chunkId)
 				if (activeChunks.has(chunkId)) {
 					continue
 				}
@@ -208,21 +211,26 @@ export function createMediumScenario(seed) {
 					chunkDepth,
 					seed,
 				})
-				activeChunks.set(chunkId, voxels)
+				activeChunks.add(chunkId)
 				upserts.push(chunkRecord(chunkX, chunkZ, voxels))
 			}
 		}
+		for (const chunkId of activeChunks) {
+			if (keepIds.has(chunkId)) {
+				continue
+			}
+			activeChunks.delete(chunkId)
+			removes.push(chunkId)
+		}
 		return {
-			changed: upserts.length > 0,
+			changed: upserts.length > 0 || removes.length > 0,
 			upserts,
+			removes,
 		}
 	}
 
-	ensureWindow(centerChunkX, centerChunkZ)
-	const initialChunks = [...activeChunks.entries()].map(([id, voxels]) => ({
-		id,
-		voxels,
-	}))
+	const initialWindow = ensureWindow(centerChunkX, centerChunkZ)
+	const initialChunks = initialWindow.upserts
 
 	return {
 		id: 'medium',
@@ -253,6 +261,7 @@ export function createMediumScenario(seed) {
 					return {
 						chunkUpdates: {
 							upserts: diff.upserts,
+							removes: diff.removes,
 						},
 					}
 				}

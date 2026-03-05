@@ -272,6 +272,9 @@ export class Engine {
 				chunkMeshRemovedCount += mesh.removedChunkCount || 0
 			} else if (worldUpdate && worldUpdate.chunkUpdates) {
 				const upserts = normalizeChunks(worldUpdate.chunkUpdates.upserts || [])
+				const removes = Array.isArray(worldUpdate.chunkUpdates.removes)
+					? worldUpdate.chunkUpdates.removes.map((id) => String(id))
+					: []
 				let totalMeshGenerationMs = 0
 				if (upserts.length > 0) {
 					const upsertResult = this.renderer.upsertChunks(upserts, {
@@ -280,6 +283,10 @@ export class Engine {
 					totalMeshGenerationMs += upsertResult.meshGenerationMs
 					chunkMeshBuildCount += upsertResult.builtChunkCount || 0
 					chunkMeshReuseCount += upsertResult.reusedChunkCount || 0
+				}
+				if (removes.length > 0) {
+					const removeResult = this.renderer.removeChunks(removes)
+					chunkMeshRemovedCount += removeResult.removedChunkCount || 0
 				}
 				meshGenerationMs = totalMeshGenerationMs
 			}

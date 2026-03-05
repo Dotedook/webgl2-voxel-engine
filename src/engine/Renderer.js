@@ -534,6 +534,38 @@ export class Renderer {
 		}
 	}
 
+	removeChunks(chunkIds) {
+		if (!Array.isArray(chunkIds) || chunkIds.length === 0) {
+			return {
+				removedChunkCount: 0,
+				chunkCount: this.chunkMeshes.size,
+				vertexCount: this.totalVertexCount,
+				triangleCount: this.totalTriangleCount,
+				voxelCount: this.totalVoxelCount,
+			}
+		}
+
+		let removedChunkCount = 0
+		for (const rawId of chunkIds) {
+			const id = String(rawId)
+			const mesh = this.chunkMeshes.get(id)
+			if (!mesh) {
+				continue
+			}
+			this.disposeMesh(mesh)
+			this.chunkMeshes.delete(id)
+			removedChunkCount += 1
+		}
+		this.recomputeTotals()
+		return {
+			removedChunkCount,
+			chunkCount: this.chunkMeshes.size,
+			vertexCount: this.totalVertexCount,
+			triangleCount: this.totalTriangleCount,
+			voxelCount: this.totalVoxelCount,
+		}
+	}
+
 	getWorldStats() {
 		return {
 			vertexCount: this.totalVertexCount,

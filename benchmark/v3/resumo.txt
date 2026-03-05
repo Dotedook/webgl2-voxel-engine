@@ -1,0 +1,91 @@
+Baseline V3 - Voxel Engine Web
+Data: 05/03/2026
+Commit: unknown
+Ambiente: Chrome 145 / macOS / notebook pessoal
+Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
+Cenarios: small, medium, large, xlarge
+
+Escopo desta leitura:
+- Este resumo usa apenas 1 suite.
+- Suite usada: createdAt 2026-03-05T23:14:45.874Z.
+- Ambiente da suite: dpr=2, canvas 3024x1714.
+
+Melhoria implementada na V3:
+- Janela ativa de chunks com eviction no cenario medium.
+- Suporte a remocao incremental via chunkUpdates.removes.
+- Dispose real de meshes removidos (CPU/GPU), sem manter chunks antigos vivos.
+- Frustum culling: ativo.
+- Cache + dirty flag: ativos no pipeline.
+
+Resultados consolidados (media das 3 repeticoes):
+
+small
+- fpsAvg: 120.39
+- fpsP50: 120.48
+- fpsP95: 135.14
+- frameMsAvg: 8.33
+- frameMsP95: 9.30
+- frameMsP99: 9.43
+- load meshGenerationMs: 1.47
+- jsHeapAvgBytes: 43,098,099.45 (~41.10 MiB)
+- status: estavel
+
+medium (cenario critico)
+- fpsAvg: 121.74
+- fpsP50: 120.48
+- fpsP95: 131.04
+- frameMsAvg: 9.35
+- frameMsP95: 8.93
+- frameMsP99: 9.43
+- load meshGenerationMs: 6327.73 (~6.33s)
+- chunkCountAvg: 1221.00
+- visibleChunksAvg: 805.60
+- culledChunksAvg: 415.40
+- chunkMeshBuildCountAvg: 0.1674
+- chunkMeshRemovedCountAvg: 0.1674
+- chunkMeshReuseCountAvg: 0.0000
+- visibleTrianglesAvg: 4.41M
+- totalTriangleCountAvg: 6.69M
+- jsHeapAvgBytes: 266,925,846.84 (~254.56 MiB)
+- status: objetivo de memoria mantido com janela fixa e eviction ativo
+
+large
+- fpsAvg: 121.26
+- fpsP50: 120.48
+- fpsP95: 143.95
+- frameMsAvg: 8.33
+- frameMsP95: 9.80
+- frameMsP99: 10.03
+- load meshGenerationMs: 318.63
+- jsHeapAvgBytes: 45,638,386.90 (~43.52 MiB)
+- status: estavel
+
+xlarge
+- fpsAvg: 113.92
+- fpsP50: 109.71
+- fpsP95: 134.55
+- frameMsAvg: 9.08
+- frameMsP95: 10.40
+- frameMsP99: 10.97
+- load meshGenerationMs: 5378.23 (~5.38s)
+- jsHeapAvgBytes: 411,507,242.64 (~392.44 MiB)
+- status: variacao maior de memoria e pacing nessa carga
+
+Comparacao direta com V2 (dpr=2) no medium:
+- fpsAvg: 121.27 -> 121.74 (+0.47, +0.38%)
+- frameMsAvg: 9.56 -> 9.35 (-0.21, -2.19%)
+- chunkCountAvg: 2909.10 -> 1221.00 (-58.03%)
+- visibleTrianglesAvg: 4.63M -> 4.41M (-4.55%)
+- jsHeapAvgBytes: 733,203,329.90 -> 266,925,846.84 (-63.59%)
+- chunkMeshRemovedCountAvg: 0.00 -> 0.1674 (eviction efetivo durante runtime)
+- load meshGenerationMs: 3159.20 -> 6327.73 (+100.30%)
+
+Leitura tecnica:
+- A V3 confirma o efeito esperado da eviction: chunkCount estabilizado em 1221 e remocoes acontecendo durante a coleta.
+- O ganho de memoria no medium continua expressivo: queda de 63.59% no jsHeap medio versus V2.
+- O trade-off principal permanece no custo de carga inicial do medium, com runtime estavel.
+
+Conclusao da V3:
+- V3 validada para objetivo de memoria no cenario medium.
+- A engine controla crescimento de memoria via janela ativa + descarte real de chunks.
+- Proximo passo tecnico recomendado: aumentar reuse em runtime (chunkMeshReuseCount) e adicionar politica de eviction com histerese/LRU para reduzir churn e amortecer rebuilds.

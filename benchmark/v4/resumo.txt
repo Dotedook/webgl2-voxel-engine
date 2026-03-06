@@ -1,0 +1,91 @@
+Baseline V4 - Voxel Engine Web
+Data: 05/03/2026
+Commit: unknown
+Ambiente: Chrome 145 / macOS / notebook pessoal
+Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
+Cenarios: small, medium, large, xlarge
+
+Escopo desta leitura:
+- Este resumo usa apenas 1 suite.
+- Suite usada: createdAt 2026-03-05T23:57:05.819Z.
+- Ambiente da suite: dpr=2, canvas 3024x1714.
+
+Mudanca da V4:
+- Reuso de recursos de mesh para chunks (pool de vao/vbo).
+- Ordem incremental ajustada para removes -> upserts para permitir reuso no mesmo frame.
+- Eviction e removals da V3 mantidos.
+
+Resultados consolidados (media das 3 repeticoes):
+
+small
+- fpsAvg: 120.44
+- fpsP50: 120.48
+- fpsP95: 135.14
+- frameMsAvg: 8.33
+- frameMsP95: 9.30
+- frameMsP99: 9.47
+- load meshGenerationMs: 1.47
+- jsHeapAvgBytes: 42,676,706.65 (~40.70 MiB)
+- status: estavel
+
+medium (cenario critico)
+- fpsAvg: 122.06
+- fpsP50: 120.48
+- fpsP95: 128.25
+- frameMsAvg: 9.37
+- frameMsP95: 8.90
+- frameMsP99: 9.40
+- load meshGenerationMs: 6560.23 (~6.56s)
+- chunkCountAvg: 1221.00
+- visibleChunksAvg: 805.63
+- culledChunksAvg: 415.37
+- chunkMeshBuildCountAvg: 0.1677
+- chunkMeshReuseCountAvg: 0.1677
+- chunkMeshRemovedCountAvg: 0.1677
+- visibleTrianglesAvg: 4.41M
+- totalTriangleCountAvg: 6.69M
+- jsHeapAvgBytes: 268,824,586.08 (~256.37 MiB)
+- status: reuso de mesh ativo em runtime
+
+large
+- fpsAvg: 120.91
+- fpsP50: 120.48
+- fpsP95: 139.84
+- frameMsAvg: 8.33
+- frameMsP95: 9.57
+- frameMsP99: 9.80
+- load meshGenerationMs: 372.57
+- jsHeapAvgBytes: 45,414,030.84 (~43.31 MiB)
+- status: estavel
+
+xlarge
+- fpsAvg: 114.87
+- fpsP50: 112.56
+- fpsP95: 129.91
+- frameMsAvg: 9.02
+- frameMsP95: 10.53
+- frameMsP99: 11.17
+- load meshGenerationMs: 6001.63 (~6.00s)
+- jsHeapAvgBytes: 388,660,912.92 (~370.66 MiB)
+- status: variacao de pacing e memoria ainda alta
+
+Comparacao direta com V3 (dpr=2) no medium:
+- fpsAvg: 121.74 -> 122.06 (+0.32, +0.26%)
+- frameMsAvg: 9.35 -> 9.37 (+0.02, +0.20%)
+- frameCpuMsAvg: 1.41 -> 1.36 (-3.13%)
+- updateMsAvg: 1.08 -> 1.10 (+1.90%)
+- meshGenerationMsAvg: 1.01 -> 1.04 (+2.98%)
+- chunkCountAvg: 1221.00 -> 1221.00 (estavel)
+- chunkMeshReuseCountAvg: 0.0000 -> 0.1677 (reuso ativado)
+- jsHeapAvgBytes: 266,925,846.84 -> 268,824,586.08 (+0.71%)
+- load meshGenerationMs: 6327.73 -> 6560.23 (+3.67%)
+
+Leitura tecnica:
+- Objetivo de ativar reuso foi atingido: chunkMeshReuseCount saiu de 0 para ~0.1677 no medium.
+- O reuso atual melhora alocacao/reciclagem de recursos GPU, mas nao remove o custo de gerar geometria por chunk.
+- Por isso, ganho de frame-time e memoria foi pequeno nesta rodada.
+
+Conclusao da V4:
+- V4 validada como passo de infraestrutura de reuso.
+- Eviction continua funcionando e o reuso agora aparece nas metricas.
+- Proximo passo tecnico recomendado: cache de geometria por chunk/signature (evitar remesh), mantendo pool atual.

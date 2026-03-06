@@ -314,6 +314,8 @@ export class Renderer {
 		this.program = null
 		this.singleMesh = null
 		this.chunkMeshes = new Map()
+		this.chunkMeshPool = []
+		this.maxChunkMeshPoolSize = 256
 		this.chunkFrustumCullingEnabled = enableChunkFrustumCulling !== false
 		this.totalVertexCount = 0
 		this.totalTriangleCount = 0
@@ -348,7 +350,7 @@ export class Renderer {
 		gl.clearColor(0.05, 0.08, 0.1, 1.0)
 	}
 
-	createMeshFromVoxels(voxels, voxelSize = 1) {
+	createMeshFromVoxels(voxels, voxelSize = 1, resource = null) {
 		const gl = this.gl
 		const meshStart = performance.now()
 		const { vertices, triangleCount, bounds } = buildExposedVoxelVertices(
@@ -356,9 +358,9 @@ export class Renderer {
 			voxelSize,
 		)
 		const meshGenerationMs = performance.now() - meshStart
-
-		const vao = gl.createVertexArray()
-		const vbo = gl.createBuffer()
+		const reusable = resource || this.acquireChunkMeshResource()
+		const vao = reusable.vao
+		const vbo = reusable.vbo
 		gl.bindVertexArray(vao)
 		gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
 		gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
@@ -378,22 +380,61 @@ export class Renderer {
 			voxelCount: voxels.length,
 			bounds,
 			meshGenerationMs,
+			resourceReused: reusable.reused,
 		}
 	}
 
-	disposeMesh(mesh) {
+	acquireChunkMeshResource() {
+		if (this.chunkMeshPool.length > 0) {
+			return {
+				...this.chunkMeshPool.pop(),
+				reused: true,
+			}
+		}
+		return {
+			vao: this.gl.createVertexArray(),
+			vbo: this.gl.createBuffer(),
+			reused: false,
+		}
+	}
+
+	releaseChunkMeshResource(mesh) {
 		if (!mesh) {
+			return
+		}
+		if (this.chunkMeshPool.length < this.maxChunkMeshPoolSize) {
+			this.chunkMeshPool.push({ vao: mesh.vao, vbo: mesh.vbo })
 			return
 		}
 		this.gl.deleteBuffer(mesh.vbo)
 		this.gl.deleteVertexArray(mesh.vao)
 	}
 
-	disposeAllChunkMeshes() {
+	disposeMesh(mesh, { allowReuse = false } = {}) {
+		if (!mesh) {
+			return
+		}
+		if (allowReuse) {
+			this.releaseChunkMeshResource(mesh)
+			return
+		}
+		this.gl.deleteBuffer(mesh.vbo)
+		this.gl.deleteVertexArray(mesh.vao)
+	}
+
+	disposeAllChunkMeshes({ allowReuse = false } = {}) {
 		for (const mesh of this.chunkMeshes.values()) {
-			this.disposeMesh(mesh)
+			this.disposeMesh(mesh, { allowReuse })
 		}
 		this.chunkMeshes.clear()
+	}
+
+	disposeChunkMeshPool() {
+		for (const mesh of this.chunkMeshPool) {
+			this.gl.deleteBuffer(mesh.vbo)
+			this.gl.deleteVertexArray(mesh.vao)
+		}
+		this.chunkMeshPool.length = 0
 	}
 
 	shouldRebuildChunk(existingMesh, chunk, signature, { forceDirty = false } = {}) {
@@ -436,8 +477,13 @@ export class Renderer {
 			this.disposeMesh(this.singleMesh)
 			this.singleMesh = null
 		}
-		this.disposeAllChunkMeshes()
-		this.singleMesh = this.createMeshFromVoxels(voxels, voxelSize)
+		this.disposeAllChunkMeshes({ allowReuse: false })
+		this.disposeChunkMeshPool()
+		this.singleMesh = this.createMeshFromVoxels(voxels, voxelSize, {
+			vao: this.gl.createVertexArray(),
+			vbo: this.gl.createBuffer(),
+			reused: false,
+		})
 		this.recomputeTotals()
 		return {
 			meshGenerationMs: this.singleMesh.meshGenerationMs,
@@ -466,13 +512,19 @@ export class Renderer {
 			const existing = this.chunkMeshes.get(id)
 			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature)
 			if (shouldRebuild) {
-				if (existing) {
-					this.disposeMesh(existing)
-				}
-				const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+				const mesh = this.createMeshFromVoxels(
+					voxels,
+					voxelSize,
+					existing
+						? { vao: existing.vao, vbo: existing.vbo, reused: true }
+						: null,
+				)
 				meshGenerationMs += mesh.meshGenerationMs
 				mesh.signature = signature
 				this.chunkMeshes.set(id, mesh)
+				if (mesh.resourceReused) {
+					reusedChunkCount += 1
+				}
 				builtChunkCount += 1
 			} else {
 				reusedChunkCount += 1
@@ -482,7 +534,7 @@ export class Renderer {
 			if (nextIds.has(id)) {
 				continue
 			}
-			this.disposeMesh(mesh)
+			this.disposeMesh(mesh, { allowReuse: true })
 			this.chunkMeshes.delete(id)
 			removedChunkCount += 1
 		}
@@ -510,13 +562,19 @@ export class Renderer {
 			const existing = this.chunkMeshes.get(id)
 			const shouldRebuild = this.shouldRebuildChunk(existing, chunk, signature)
 			if (shouldRebuild) {
-				if (existing) {
-					this.disposeMesh(existing)
-				}
-				const mesh = this.createMeshFromVoxels(voxels, voxelSize)
+				const mesh = this.createMeshFromVoxels(
+					voxels,
+					voxelSize,
+					existing
+						? { vao: existing.vao, vbo: existing.vbo, reused: true }
+						: null,
+				)
 				meshGenerationMs += mesh.meshGenerationMs
 				mesh.signature = signature
 				this.chunkMeshes.set(id, mesh)
+				if (mesh.resourceReused) {
+					reusedChunkCount += 1
+				}
 				builtChunkCount += 1
 			} else {
 				reusedChunkCount += 1
@@ -552,7 +610,7 @@ export class Renderer {
 			if (!mesh) {
 				continue
 			}
-			this.disposeMesh(mesh)
+			this.disposeMesh(mesh, { allowReuse: true })
 			this.chunkMeshes.delete(id)
 			removedChunkCount += 1
 		}

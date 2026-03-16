@@ -316,6 +316,9 @@ export class Renderer {
 		this.chunkMeshes = new Map()
 		this.chunkMeshPool = []
 		this.maxChunkMeshPoolSize = 256
+		this.chunkGeometryCache = new Map()
+		this.chunkGeometryCacheBytes = 0
+		this.maxChunkGeometryCacheBytes = 64 * 1024 * 1024
 		this.chunkFrustumCullingEnabled = enableChunkFrustumCulling !== false
 		this.totalVertexCount = 0
 		this.totalTriangleCount = 0
@@ -350,13 +353,20 @@ export class Renderer {
 		gl.clearColor(0.05, 0.08, 0.1, 1.0)
 	}
 
-	createMeshFromVoxels(voxels, voxelSize = 1, resource = null) {
+	createMeshFromVoxels(
+		voxels,
+		voxelSize = 1,
+		resource = null,
+		signature = null,
+	) {
 		const gl = this.gl
 		const meshStart = performance.now()
-		const { vertices, triangleCount, bounds } = buildExposedVoxelVertices(
+		const geometryResult = this.buildOrGetChunkGeometry(
 			voxels,
 			voxelSize,
+			signature,
 		)
+		const { vertices, triangleCount, bounds, voxelCount } = geometryResult.geometry
 		const meshGenerationMs = performance.now() - meshStart
 		const reusable = resource || this.acquireChunkMeshResource()
 		const vao = reusable.vao
@@ -377,10 +387,11 @@ export class Renderer {
 			vbo,
 			vertexCount,
 			triangleCount,
-			voxelCount: voxels.length,
+			voxelCount,
 			bounds,
 			meshGenerationMs,
 			resourceReused: reusable.reused,
+			geometryReused: geometryResult.cached,
 		}
 	}
 
@@ -437,6 +448,87 @@ export class Renderer {
 		this.chunkMeshPool.length = 0
 	}
 
+	getChunkGeometryCacheKey(signature, voxelSize) {
+		if (!signature) {
+			return null
+		}
+		return signature + '|s:' + voxelSize
+	}
+
+	clearChunkGeometryCache() {
+		this.chunkGeometryCache.clear()
+		this.chunkGeometryCacheBytes = 0
+	}
+
+	getCachedChunkGeometry(cacheKey) {
+		if (!cacheKey) {
+			return null
+		}
+		const entry = this.chunkGeometryCache.get(cacheKey)
+		if (!entry) {
+			return null
+		}
+		this.chunkGeometryCache.delete(cacheKey)
+		this.chunkGeometryCache.set(cacheKey, entry)
+		return entry
+	}
+
+	storeChunkGeometry(cacheKey, geometry) {
+		if (!cacheKey) {
+			return
+		}
+		const byteLength = geometry.vertices.byteLength
+		if (byteLength > this.maxChunkGeometryCacheBytes) {
+			return
+		}
+		const existing = this.chunkGeometryCache.get(cacheKey)
+		if (existing) {
+			this.chunkGeometryCacheBytes -= existing.byteLength
+			this.chunkGeometryCache.delete(cacheKey)
+		}
+		const entry = {
+			vertices: geometry.vertices,
+			triangleCount: geometry.triangleCount,
+			bounds: geometry.bounds,
+			voxelCount: geometry.voxelCount,
+			byteLength,
+		}
+		this.chunkGeometryCache.set(cacheKey, entry)
+		this.chunkGeometryCacheBytes += byteLength
+		while (
+			this.chunkGeometryCacheBytes > this.maxChunkGeometryCacheBytes &&
+			this.chunkGeometryCache.size > 0
+		) {
+			const oldestKey = this.chunkGeometryCache.keys().next().value
+			const oldest = this.chunkGeometryCache.get(oldestKey)
+			this.chunkGeometryCache.delete(oldestKey)
+			this.chunkGeometryCacheBytes -= oldest.byteLength
+		}
+	}
+
+	buildOrGetChunkGeometry(voxels, voxelSize, signature) {
+		const cacheKey = this.getChunkGeometryCacheKey(signature, voxelSize)
+		const cached = this.getCachedChunkGeometry(cacheKey)
+		if (cached) {
+			return {
+				cached: true,
+				geometry: cached,
+			}
+		}
+		const built = buildExposedVoxelVertices(voxels, voxelSize)
+		const geometry = {
+			vertices: built.vertices,
+			triangleCount: built.triangleCount,
+			bounds: built.bounds,
+			voxelCount: voxels.length,
+		}
+		this.storeChunkGeometry(cacheKey, geometry)
+		return {
+			cached: false,
+			geometry,
+		}
+	}
+
 	shouldRebuildChunk(existingMesh, chunk, signature, { forceDirty = false } = {}) {
 		if (!existingMesh) {
 			return true
@@ -479,6 +571,7 @@ export class Renderer {
 		}
 		this.disposeAllChunkMeshes({ allowReuse: false })
 		this.disposeChunkMeshPool()
+		this.clearChunkGeometryCache()
 		this.singleMesh = this.createMeshFromVoxels(voxels, voxelSize, {
 			vao: this.gl.createVertexArray(),
 			vbo: this.gl.createBuffer(),
@@ -518,11 +611,12 @@ export class Renderer {
 					existing
 						? { vao: existing.vao, vbo: existing.vbo, reused: true }
 						: null,
+					signature,
 				)
 				meshGenerationMs += mesh.meshGenerationMs
 				mesh.signature = signature
 				this.chunkMeshes.set(id, mesh)
-				if (mesh.resourceReused) {
+				if (mesh.resourceReused || mesh.geometryReused) {
 					reusedChunkCount += 1
 				}
 				builtChunkCount += 1
@@ -568,11 +662,12 @@ export class Renderer {
 					existing
 						? { vao: existing.vao, vbo: existing.vbo, reused: true }
 						: null,
+					signature,
 				)
 				meshGenerationMs += mesh.meshGenerationMs
 				mesh.signature = signature
 				this.chunkMeshes.set(id, mesh)
-				if (mesh.resourceReused) {
+				if (mesh.resourceReused || mesh.geometryReused) {
 					reusedChunkCount += 1
 				}
 				builtChunkCount += 1

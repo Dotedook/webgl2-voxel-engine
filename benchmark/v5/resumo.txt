@@ -1,0 +1,92 @@
+Baseline V5 - Voxel Engine Web
+Data: 16/03/2026
+Commit: unknown
+Ambiente: Chrome 145 / macOS / notebook pessoal
+Protocolo: warmup=10000ms, collect=60000ms, repetitions=3, seed=1337
+Cenarios: small, medium, large, xlarge
+
+Escopo desta leitura:
+- Este resumo usa apenas 1 suite.
+- Suite usada: createdAt 2026-03-16T23:06:28.823Z.
+- Ambiente da suite: dpr=2, canvas 3024x1646.
+
+Mudanca da V5:
+- Cache LRU de geometria por chunk signature.
+- Reuso continua apoiado no pool GPU da V4.
+- Objetivo: evitar remeshing de chunks equivalentes e reduzir custo de rebuild.
+
+Resultados consolidados (media das 3 repeticoes):
+
+small
+- fpsAvg: 120.42
+- fpsP50: 120.48
+- fpsP95: 133.93
+- frameMsAvg: 8.33
+- frameMsP95: 9.23
+- frameMsP99: 9.40
+- load meshGenerationMs: 1.43
+- jsHeapAvgBytes: 4,754,150.65 (~4.53 MiB)
+- status: estavel
+
+medium (cenario critico)
+- fpsAvg: 121.66
+- fpsP50: 120.48
+- fpsP95: 132.16
+- frameMsAvg: 9.33
+- frameMsP95: 9.20
+- frameMsP99: 9.40
+- load meshGenerationMs: 6650.40 (~6.65s)
+- chunkCountAvg: 1221.00
+- visibleChunksAvg: 816.88
+- culledChunksAvg: 404.12
+- chunkMeshBuildCountAvg: 0.1685
+- chunkMeshReuseCountAvg: 0.1685
+- chunkMeshRemovedCountAvg: 0.1685
+- visibleTrianglesAvg: 4.48M
+- totalTriangleCountAvg: 6.69M
+- jsHeapAvgBytes: 293,165,681.45 (~279.58 MiB)
+- status: pequena melhora de frame time, sem ganho adicional claro de reuso
+
+large
+- fpsAvg: 120.50
+- fpsP50: 120.48
+- fpsP95: 133.93
+- frameMsAvg: 8.33
+- frameMsP95: 9.30
+- frameMsP99: 9.40
+- load meshGenerationMs: 362.07
+- jsHeapAvgBytes: 20,944,879.43 (~19.97 MiB)
+- status: estavel
+
+xlarge
+- fpsAvg: 173.64
+- fpsP50: 120.48
+- fpsP95: 464.29
+- frameMsAvg: 8.70
+- frameMsP95: 16.00
+- frameMsP99: 21.20
+- load meshGenerationMs: 6565.10 (~6.57s)
+- jsHeapAvgBytes: 367,044,801.24 (~350.04 MiB)
+- status: media de FPS muito variavel; pacing continua ruim no P95/P99
+
+Comparacao direta com V4 (dpr=2) no medium:
+- fpsAvg: 122.06 -> 121.66 (-0.40, -0.33%)
+- frameMsAvg: 9.37 -> 9.33 (-0.04, -0.41%)
+- frameCpuMsAvg: 1.36 -> 1.31 (-3.99%)
+- updateMsAvg: 1.10 -> 1.05 (-4.03%)
+- meshGenerationMsAvg: 1.04 -> 1.00 (-3.67%)
+- chunkCountAvg: 1221.00 -> 1221.00 (estavel)
+- chunkMeshReuseCountAvg: 0.1677 -> 0.1685 (+0.51%)
+- jsHeapAvgBytes: 268,824,586.08 -> 293,165,681.45 (+9.05%)
+- load meshGenerationMs: 6560.23 -> 6650.40 (+1.37%)
+
+Leitura tecnica:
+- A V5 nao mostrou aumento relevante de reuse nas metricas do medium.
+- O cache de geometria nao apareceu como ganho material neste protocolo; na pratica, o valor de chunkMeshReuseCount ficou quase identico ao da V4.
+- Houve melhora pequena em frameMs, frameCpuMs, updateMs e meshGenerationMs medio por frame, mas nada suficiente para caracterizar salto de arquitetura.
+- Em contrapartida, heap medio e tempo de carga inicial pioraram no medium.
+
+Conclusao da V5:
+- V5 ficou funcional como experimento de cache de geometria, mas a hipotese principal nao se confirmou nesta suite.
+- O gargalo do medium continua ligado a remeshing/rebuild, e o cache atual nao esta gerando hits suficientes para mudar o comportamento agregado.
+- Proximo passo tecnico recomendado: revisar a estrategia de chave/signature e o ciclo de vida do cache, ou partir para histerese/LRU de chunks completos para aumentar reaproveitamento real.
